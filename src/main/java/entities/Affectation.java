@@ -1,7 +1,7 @@
 package entities;
 
 
-import javax.persistence.*;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "affectation")
@@ -10,8 +10,8 @@ public class Affectation {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long ida;
 
-    @OneToOne
-    @JoinColumn(name = "ide", unique = true)
+    @ManyToOne
+    @JoinColumn(name = "ide")
     private Etudiant etudiant;
 
     @ManyToOne
@@ -50,5 +50,7 @@ public class Affectation {
 	public void setEncadrant(Professeur encadrant) {
 		this.encadrant = encadrant;
 	}
+
+	
     
 }

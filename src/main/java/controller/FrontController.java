@@ -732,6 +732,7 @@ public class FrontController extends HttpServlet {
         run.setFontSize(9);
     }
 
+    
     private String filiereColorDocx(String filiere) {
         if ("GI".equals(filiere))   return C_GI_DOCX;
         if ("ID".equals(filiere))   return C_ID_DOCX;
@@ -1010,7 +1011,7 @@ public class FrontController extends HttpServlet {
         
         Map<String, List<Soutenance>> groups = new LinkedHashMap<>();
         for (Soutenance s : soutenances) {
-            String key = s.getJury().getId_jury() + "_" + s.getDate() + "_" + s.getHeure() + "_" + s.getSalle().getId_salle();
+            String key = s.getJury().getIdJury() + "_" + s.getDate() + "_" + s.getHeure() + "_" + s.getSalle().getId_salle();
             groups.computeIfAbsent(key, k -> new ArrayList<>()).add(s);
         }
 
@@ -1135,7 +1136,7 @@ public class FrontController extends HttpServlet {
             
             Map<String, List<Soutenance>> groups = new LinkedHashMap<>();
             for (Soutenance s : soutenances) {
-                String key = s.getJury().getId_jury() + "_" + s.getDate() + "_" + s.getHeure() + "_" + s.getSalle().getId_salle();
+                String key = s.getJury().getIdJury() + "_" + s.getDate() + "_" + s.getHeure() + "_" + s.getSalle().getId_salle();
                 groups.computeIfAbsent(key, k -> new ArrayList<>()).add(s);
             }
 

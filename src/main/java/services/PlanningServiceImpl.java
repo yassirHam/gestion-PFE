@@ -357,8 +357,21 @@ public class PlanningServiceImpl implements PlanningService {
         List<Professeur> sorted = new ArrayList<>(profs);
         sorted.sort(Comparator.comparing(Professeur::getIdp));
         profColorMap = new LinkedHashMap<>();
+        
+        // Generate distinct colors using the golden ratio conjugate
+        float hue = 0.0f;
+        float goldenRatioConjugate = 0.618033988749895f;
+        
         for (int i = 0; i < sorted.size(); i++) {
-            profColorMap.put(sorted.get(i).getIdp(), COLOR_PALETTE[i % COLOR_PALETTE.length]);
+            if (i < COLOR_PALETTE.length) {
+                profColorMap.put(sorted.get(i).getIdp(), COLOR_PALETTE[i]);
+            } else {
+                hue += goldenRatioConjugate;
+                hue %= 1.0f;
+                java.awt.Color c = java.awt.Color.getHSBColor(hue, 0.75f, 0.85f);
+                String hex = String.format("%02X%02X%02X", c.getRed(), c.getGreen(), c.getBlue());
+                profColorMap.put(sorted.get(i).getIdp(), hex);
+            }
         }
     }
 

@@ -17,7 +17,7 @@ public class Etudiant {
     private String filiere;
     private String email;
     private String sujet_stage;
-    private String binome_cne; // CNE of binôme partner, null if solo project
+    private String binome_cne; 
 
     @Temporal(TemporalType.DATE)
     private Date date_debut_stage;

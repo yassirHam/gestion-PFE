@@ -1026,7 +1026,15 @@ public class FrontController extends HttpServlet {
 
         SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
         int id = 1;
+        
+        Map<String, List<Soutenance>> groups = new LinkedHashMap<>();
         for (Soutenance s : soutenances) {
+            String key = s.getJury().getId_jury() + "_" + s.getDate() + "_" + s.getHeure() + "_" + s.getSalle().getId_salle();
+            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(s);
+        }
+
+        for (List<Soutenance> group : groups.values()) {
+            Soutenance s = group.get(0);
             Professeur enc = s.getJury().getPresident();
             Professeur m1  = s.getJury().getRapporteur1();
             Professeur m2  = s.getJury().getRapporteur2();
@@ -1040,33 +1048,41 @@ public class FrontController extends HttpServlet {
             DeviceRgb timeColor = getHeureColorPdf(s.getHeure());
             DeviceRgb salleColor = getSalleColorPdf(s.getSalle().getNum_salle());
 
+            String nomEtu = group.get(0).getEtudiant().getNomE();
+            String prenomEtu = group.get(0).getEtudiant().getPrenomE();
+            boolean isBinome = group.size() > 1;
+            if (isBinome) {
+                nomEtu += " & " + group.get(1).getEtudiant().getNomE();
+                prenomEtu += " & " + group.get(1).getEtudiant().getPrenomE();
+            }
+
             // ID
-            table.addCell(planCell(String.valueOf(id++), normal, 8, COLOR_EMPTY, false));
+            table.addCell(planCell(String.valueOf(id++), normal, 8, COLOR_EMPTY, false, isBinome));
             // Encadrant
-            table.addCell(planCell(enc.getNom() + " " + enc.getPrenom(), bold, 8, encColor, true));
+            table.addCell(planCell(enc.getNom() + " " + enc.getPrenom(), bold, 8, encColor, true, isBinome));
             // Jury 1
-            table.addCell(planCell(m1.getNom() + " " + m1.getPrenom(), normal, 8, m1Color, true));
+            table.addCell(planCell(m1.getNom() + " " + m1.getPrenom(), normal, 8, m1Color, true, isBinome));
             // Jury 2
-            table.addCell(planCell(m2.getNom() + " " + m2.getPrenom(), normal, 8, m2Color, true));
+            table.addCell(planCell(m2.getNom() + " " + m2.getPrenom(), normal, 8, m2Color, true, isBinome));
             // Date
-            table.addCell(planCell(sdf.format(s.getDate()), normal, 8, dateColor, false));
+            table.addCell(planCell(sdf.format(s.getDate()), normal, 8, dateColor, false, isBinome));
             // Heure
-            table.addCell(planCell(s.getHeure(), bold, 8, timeColor, false));
+            table.addCell(planCell(s.getHeure(), bold, 8, timeColor, false, isBinome));
             // Salle
-            table.addCell(planCell(s.getSalle().getNum_salle(), normal, 8, salleColor, false));
+            table.addCell(planCell(s.getSalle().getNum_salle(), normal, 8, salleColor, false, isBinome));
             // Nom étudiant
-            table.addCell(planCell(s.getEtudiant().getNomE(), normal, 8, filColor, false));
+            table.addCell(planCell(nomEtu, isBinome ? bold : normal, 8, filColor, false, isBinome));
             // Prénom étudiant
-            table.addCell(planCell(s.getEtudiant().getPrenomE(), normal, 8, filColor, false));
+            table.addCell(planCell(prenomEtu, isBinome ? bold : normal, 8, filColor, false, isBinome));
             // Filière
-            table.addCell(planCell(filiere, normal, 8, filColor, false));
+            table.addCell(planCell(filiere, normal, 8, filColor, false, isBinome));
         }
 
         doc.add(table);
         doc.close();
     }
 
-    private Cell planCell(String text, PdfFont font, int size, DeviceRgb bg, boolean white) {
+    private Cell planCell(String text, PdfFont font, int size, DeviceRgb bg, boolean white, boolean isBinome) {
         Cell c = new Cell()
                 .add(new Paragraph(text == null ? "" : text).setFont(font).setFontSize(size))
                 .setBackgroundColor(bg)
@@ -1074,6 +1090,9 @@ public class FrontController extends HttpServlet {
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
                 .setPadding(2);
         if (white) c.setFontColor(ColorConstants.WHITE);
+        if (isBinome) {
+            c.setBorder(new com.itextpdf.layout.borders.SolidBorder(com.itextpdf.kernel.colors.ColorConstants.BLACK, 1.5f));
+        }
         return c;
     }
 
@@ -1132,7 +1151,15 @@ public class FrontController extends HttpServlet {
 
             SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
             int id = 1;
+            
+            Map<String, List<Soutenance>> groups = new LinkedHashMap<>();
             for (Soutenance s : soutenances) {
+                String key = s.getJury().getId_jury() + "_" + s.getDate() + "_" + s.getHeure() + "_" + s.getSalle().getId_salle();
+                groups.computeIfAbsent(key, k -> new ArrayList<>()).add(s);
+            }
+
+            for (List<Soutenance> group : groups.values()) {
+                Soutenance s = group.get(0);
                 Professeur enc = s.getJury().getPresident();
                 Professeur m1  = s.getJury().getRapporteur1();
                 Professeur m2  = s.getJury().getRapporteur2();
@@ -1149,6 +1176,14 @@ public class FrontController extends HttpServlet {
                 XWPFTableRow row = table.createRow();
                 while (row.getTableCells().size() < headers.length) row.addNewTableCell();
 
+                String nomEtu = group.get(0).getEtudiant().getNomE();
+                String prenomEtu = group.get(0).getEtudiant().getPrenomE();
+                boolean isBinome = group.size() > 1;
+                if (isBinome) {
+                    nomEtu += " & " + group.get(1).getEtudiant().getNomE();
+                    prenomEtu += " & " + group.get(1).getEtudiant().getPrenomE();
+                }
+
                 // ID
                 setCellDocx(row.getCell(0), String.valueOf(id++), C_EMPTY_DOCX, false, false, 8);
                 // Encadrant
@@ -1164,9 +1199,9 @@ public class FrontController extends HttpServlet {
                 // Salle
                 setCellDocx(row.getCell(6), s.getSalle().getNum_salle(), salleColor, false, false, 8);
                 // Nom
-                setCellDocx(row.getCell(7), s.getEtudiant().getNomE(), filColor, false, false, 8);
+                setCellDocx(row.getCell(7), nomEtu, filColor, false, isBinome, 8);
                 // Prénom
-                setCellDocx(row.getCell(8), s.getEtudiant().getPrenomE(), filColor, false, false, 8);
+                setCellDocx(row.getCell(8), prenomEtu, filColor, false, isBinome, 8);
                 // Filière
                 setCellDocx(row.getCell(9), filiere, filColor, false, false, 8);
             }

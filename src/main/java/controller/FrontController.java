@@ -25,7 +25,10 @@ import dao.ProfesseurDAOImpl;
 import entities.Affectation;
 import entities.Etudiant;
 import entities.FichierListe;
+import entities.Jury;
 import entities.Professeur;
+import entities.Salle;
+import entities.Soutenance;
 
 import javax.servlet.ServletException;
 import javax.servlet.annotation.MultipartConfig;
@@ -48,6 +51,7 @@ import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -103,18 +107,33 @@ public class FrontController extends HttpServlet {
             case "/exportDocx.do":
                 doExportDocx(req, resp);
                 break;
+            case "/planning.do":
+                doPlanning(req, resp);
+                break;
+            case "/lancerPlanning.do":
+                doLancerPlanning(req, resp);
+                break;
+            case "/planningPdf.do":
+                doPlanningPdf(req, resp);
+                break;
+            case "/planningDocx.do":
+                doPlanningDocx(req, resp);
+                break;
             default:
                 req.getRequestDispatcher("index.jsp").forward(req, resp);
                 break;
         }
     }
 
+    @SuppressWarnings("unchecked")
     private void doDashboard(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        int totalEtudiants = service.getTotalEtudiantsAffectes();
-        int totalProfs = service.getTotalProfesseursEncadrants();
+        List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
+
+        int totalEtudiants = service.getTotalEtudiantsAffectes(lastFilieres);
+        int totalProfs = service.getTotalProfesseursEncadrants(lastFilieres);
         
-        Map<String, Integer> etudiantsParProf = service.getEtudiantsParProf();
-        Map<String, Integer> etudiantsParFiliere = service.getEtudiantsParFiliere();
+        Map<String, Integer> etudiantsParProf = service.getEtudiantsParProf(lastFilieres);
+        Map<String, Integer> etudiantsParFiliere = service.getEtudiantsParFiliere(lastFilieres);
 
         req.setAttribute("totalEtudiants", totalEtudiants);
         req.setAttribute("totalProfs", totalProfs);
@@ -630,4 +649,215 @@ public class FrontController extends HttpServlet {
         if ("TDIA".equals(filiere)) return C_TDIA_DOCX;
         return C_EMPTY_DOCX;
     }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  PLANNING HANDLERS
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private void doPlanning(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+        List<Soutenance> soutenances = service.getAllSoutenances();
+        Map<Long, String> colors = service.getProfessorColors();
+        req.setAttribute("soutenances", soutenances);
+        req.setAttribute("profColors", colors);
+        req.getRequestDispatcher("planning.jsp").forward(req, resp);
+    }
+
+    private void doLancerPlanning(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+        List<String> debug = new ArrayList<>();
+        service.genererPlanning(debug);
+
+        List<Soutenance> soutenances = service.getAllSoutenances();
+        Map<Long, String> colors = service.getProfessorColors();
+        req.setAttribute("soutenances", soutenances);
+        req.setAttribute("profColors", colors);
+        req.setAttribute("planningDone", true);
+        req.setAttribute("debug", debug);
+        req.getRequestDispatcher("planning.jsp").forward(req, resp);
+    }
+
+    // ── Planning PDF export ───────────────────────────────────────────────────
+    private void doPlanningPdf(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+
+        List<Soutenance> soutenances = service.getAllSoutenances();
+        Map<Long, String> colorMap   = service.getProfessorColors();
+
+        resp.setContentType("application/pdf");
+        resp.setHeader("Content-Disposition", "attachment; filename=planning_soutenances.pdf");
+
+        PdfWriter   writer = new PdfWriter(resp.getOutputStream());
+        PdfDocument pdf    = new PdfDocument(writer);
+        pdf.setDefaultPageSize(PageSize.A4.rotate());
+        com.itextpdf.layout.Document doc = new com.itextpdf.layout.Document(pdf);
+        doc.setMargins(20, 20, 20, 20);
+
+        PdfFont bold   = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD);
+        PdfFont normal = PdfFontFactory.createFont(StandardFonts.HELVETICA);
+
+        // Header
+        doc.add(new Paragraph("École Nationale des Sciences Appliquées – Al Hoceima")
+                .setFont(bold).setFontSize(12)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
+        doc.add(new Paragraph("Département Mathématiques et Informatique")
+                .setFont(normal).setFontSize(10)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
+        doc.add(new Paragraph("Planning des soutenances des Projets de Fin d'Etude")
+                .setFont(bold).setFontSize(10)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
+        doc.add(new Paragraph("(Première Session) — Année Universitaire 2024/2025")
+                .setFont(normal).setFontSize(9)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setMarginBottom(8));
+
+        // Table columns: ID | Encadrant | Jury1 | Jury2 | Date | Heure | Salle | Nom | Prénom | Filière
+        float[] cols = {3f, 12f, 12f, 12f, 8f, 6f, 6f, 9f, 9f, 5f};
+        Table table = new Table(UnitValue.createPercentArray(cols)).useAllAvailableWidth();
+
+        // Header row
+        String[] headers = {"ID","Encadrant","Membre de jury 1","Membre de jury 2",
+                            "Date","Heure","Salle","Nom d'étudiant","Prénom d'étudiant","Filière"};
+        for (String h : headers) {
+            table.addHeaderCell(new Cell()
+                    .add(new Paragraph(h).setFont(bold).setFontSize(8)
+                            .setFontColor(ColorConstants.WHITE))
+                    .setBackgroundColor(COLOR_HEADER)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    .setPadding(3));
+        }
+
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
+        int id = 1;
+        for (Soutenance s : soutenances) {
+            Professeur enc = s.getJury().getPresident();
+            Professeur m1  = s.getJury().getRapporteur1();
+            Professeur m2  = s.getJury().getRapporteur2();
+            String filiere  = s.getEtudiant().getFiliere();
+
+            DeviceRgb encColor = hexToRgb(colorMap.getOrDefault(enc.getIdp(), "1A56DB"));
+            DeviceRgb m1Color  = hexToRgb(colorMap.getOrDefault(m1.getIdp(),  "2ECC71"));
+            DeviceRgb m2Color  = hexToRgb(colorMap.getOrDefault(m2.getIdp(),  "E67E22"));
+            DeviceRgb filColor = filiereColorPdf(filiere);
+
+            // ID
+            table.addCell(planCell(String.valueOf(id++), normal, 8, COLOR_EMPTY, false));
+            // Encadrant
+            table.addCell(planCell(enc.getNom() + " " + enc.getPrenom(), bold, 8, encColor, true));
+            // Jury 1
+            table.addCell(planCell(m1.getNom() + " " + m1.getPrenom(), normal, 8, m1Color, true));
+            // Jury 2
+            table.addCell(planCell(m2.getNom() + " " + m2.getPrenom(), normal, 8, m2Color, true));
+            // Date
+            table.addCell(planCell(sdf.format(s.getDate()), normal, 8, filColor, false));
+            // Heure
+            table.addCell(planCell(s.getHeure(), normal, 8, filColor, false));
+            // Salle
+            table.addCell(planCell(s.getSalle().getNum_salle(), normal, 8, filColor, false));
+            // Nom étudiant
+            table.addCell(planCell(s.getEtudiant().getNomE(), normal, 8, COLOR_EMPTY, false));
+            // Prénom étudiant
+            table.addCell(planCell(s.getEtudiant().getPrenomE(), normal, 8, COLOR_EMPTY, false));
+            // Filière
+            table.addCell(planCell(filiere, normal, 8, filColor, false));
+        }
+
+        doc.add(table);
+        doc.close();
+    }
+
+    private Cell planCell(String text, PdfFont font, int size, DeviceRgb bg, boolean white) {
+        Cell c = new Cell()
+                .add(new Paragraph(text == null ? "" : text).setFont(font).setFontSize(size))
+                .setBackgroundColor(bg)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setVerticalAlignment(VerticalAlignment.MIDDLE)
+                .setPadding(2);
+        if (white) c.setFontColor(ColorConstants.WHITE);
+        return c;
+    }
+
+    private DeviceRgb hexToRgb(String hex) {
+        try {
+            int r = Integer.parseInt(hex.substring(0, 2), 16);
+            int g = Integer.parseInt(hex.substring(2, 4), 16);
+            int b = Integer.parseInt(hex.substring(4, 6), 16);
+            return new DeviceRgb(r / 255f, g / 255f, b / 255f);
+        } catch (Exception e) {
+            return COLOR_EMPTY;
+        }
+    }
+
+    // ── Planning DOCX export ──────────────────────────────────────────────────
+    private void doPlanningDocx(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+
+        List<Soutenance> soutenances = service.getAllSoutenances();
+        Map<Long, String> colorMap   = service.getProfessorColors();
+
+        resp.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        resp.setHeader("Content-Disposition", "attachment; filename=planning_soutenances.docx");
+
+        try (XWPFDocument doc = new XWPFDocument()) {
+            // Landscape A4
+            CTDocument1 ctDoc = doc.getDocument();
+            CTBody body = ctDoc.getBody();
+            if (!body.isSetSectPr()) body.addNewSectPr();
+            CTSectPr sect = body.getSectPr();
+            CTPageSz pgSz = sect.isSetPgSz() ? sect.getPgSz() : sect.addNewPgSz();
+            pgSz.setW(BigInteger.valueOf(16838));
+            pgSz.setH(BigInteger.valueOf(11906));
+            pgSz.setOrient(STPageOrientation.LANDSCAPE);
+
+            center(doc, "École Nationale des Sciences Appliquées – Al Hoceima", 14, true);
+            center(doc, "Département Mathématiques et Informatique", 12, false);
+            center(doc, "Planning des soutenances des Projets de Fin d'Etude", 11, true);
+            center(doc, "(Première Session) — Année Universitaire 2024/2025", 10, false);
+            doc.createParagraph();
+
+            // 10 columns
+            XWPFTable table = doc.createTable();
+            setWidth(table, 13000);
+
+            String[] headers = {"ID","Encadrant","Membre de jury 1","Membre de jury 2",
+                                "Date","Heure","Salle","Nom d'étudiant","Prénom d'étudiant","Filière"};
+
+            XWPFTableRow hRow = table.getRow(0);
+            while (hRow.getTableCells().size() < headers.length) hRow.addNewTableCell();
+            for (int i = 0; i < headers.length; i++) {
+                setCellDocx(hRow.getCell(i), headers[i], C_HEADER_DOCX, true, true, 8);
+            }
+
+            SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
+            int id = 1;
+            for (Soutenance s : soutenances) {
+                Professeur enc = s.getJury().getPresident();
+                Professeur m1  = s.getJury().getRapporteur1();
+                Professeur m2  = s.getJury().getRapporteur2();
+                String filiere  = s.getEtudiant().getFiliere();
+
+                String encHex = colorMap.getOrDefault(enc.getIdp(), C_HEADER_DOCX);
+                String m1Hex  = colorMap.getOrDefault(m1.getIdp(),  "2ECC71");
+                String m2Hex  = colorMap.getOrDefault(m2.getIdp(),  "E67E22");
+                String filHex = filiereColorDocx(filiere);
+
+                XWPFTableRow row = table.createRow();
+                while (row.getTableCells().size() < headers.length) row.addNewTableCell();
+
+                setCellDocx(row.getCell(0), String.valueOf(id++),                     C_EMPTY_DOCX, false, false, 8);
+                setCellDocx(row.getCell(1), enc.getNom() + " " + enc.getPrenom(),      encHex,       true,  true,  8);
+                setCellDocx(row.getCell(2), m1.getNom()  + " " + m1.getPrenom(),       m1Hex,        true,  true,  8);
+                setCellDocx(row.getCell(3), m2.getNom()  + " " + m2.getPrenom(),       m2Hex,        true,  true,  8);
+                setCellDocx(row.getCell(4), sdf.format(s.getDate()),                   filHex,       false, false, 8);
+                setCellDocx(row.getCell(5), s.getHeure(),                              filHex,       false, false, 8);
+                setCellDocx(row.getCell(6), s.getSalle().getNum_salle(),               filHex,       false, false, 8);
+                setCellDocx(row.getCell(7), s.getEtudiant().getNomE(),                 C_EMPTY_DOCX, false, false, 8);
+                setCellDocx(row.getCell(8), s.getEtudiant().getPrenomE(),              C_EMPTY_DOCX, false, false, 8);
+                setCellDocx(row.getCell(9), filiere,                                   filHex,       false, false, 8);
+            }
+
+            doc.write(resp.getOutputStream());
+        }
+    }
 }
+

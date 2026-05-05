@@ -4,6 +4,7 @@ import entities.Affectation;
 import entities.Etudiant;
 import entities.FichierListe;
 import entities.Professeur;
+import entities.Soutenance;
 
 import java.util.List;
 import java.util.Map;
@@ -30,8 +31,14 @@ public interface PfeService {
     void deleteFichierByFiliere(String filiere);
 
     // Dashboard operations
-    Map<String, Integer> getEtudiantsParProf();
-    Map<String, Integer> getEtudiantsParFiliere();
-    int getTotalEtudiantsAffectes();
-    int getTotalProfesseursEncadrants();
+    Map<String, Integer> getEtudiantsParProf(List<String> filieresFiltre);
+    Map<String, Integer> getEtudiantsParFiliere(List<String> filieresFiltre);
+    int getTotalEtudiantsAffectes(List<String> filieresFiltre);
+    int getTotalProfesseursEncadrants(List<String> filieresFiltre);
+
+    // Planning operations
+    List<Soutenance> genererPlanning(List<String> debugLog);
+    List<Soutenance> getAllSoutenances();
+    Map<Long, String> getProfessorColors();
+    void deletePlanning();
 }

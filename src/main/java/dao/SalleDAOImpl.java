@@ -20,6 +20,19 @@ public class SalleDAOImpl implements SalleDAO {
     }
 
     @Override
+    public void save(Salle salle) {
+        Transaction tx = null;
+        try (Session session = sf.openSession()) {
+            tx = session.beginTransaction();
+            session.persist(salle);
+            tx.commit();
+        } catch (Exception e) {
+            if (tx != null) tx.rollback();
+            e.printStackTrace();
+        }
+    }
+
+    @Override
     public void saveAll(List<Salle> salles) {
         Transaction tx = null;
         try (Session session = sf.openSession()) {

@@ -824,7 +824,7 @@ public class FrontController extends HttpServlet {
             e.printStackTrace();
         }
         
-        req.getRequestDispatcher("planning.jsp").forward(req, resp);
+        resp.sendRedirect("planning.do");
     }
 
     // ── Planning PDF export ───────────────────────────────────────────────────

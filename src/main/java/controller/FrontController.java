@@ -111,17 +111,6 @@ public class FrontController extends HttpServlet {
 
     private void doAffectation(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         req.setAttribute("fichiers", fichierDao.findAll());
-        
-        // Populate grouped data if any
-        Map<Professeur, List<Affectation>> grouped = new LinkedHashMap<>();
-        List<Affectation> allAffectations = affDao.findAllWithDetails();
-        for (Affectation a : allAffectations) {
-            grouped.computeIfAbsent(a.getEncadrant(), k -> new ArrayList<>()).add(a);
-        }
-        if(!grouped.isEmpty()){
-            req.setAttribute("grouped", grouped);
-        }
-        
         req.getRequestDispatcher("affectation.jsp").forward(req, resp);
     }
 

@@ -53,7 +53,7 @@ public class PlanningServiceImpl implements PlanningService {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
-    public List<Soutenance> genererPlanning(List<String> log) {
+    public List<Soutenance> genererPlanning(List<String> log, List<Long> selectedSalles) {
 
         List<Affectation> affectations = affDao.findAllWithDetails();
         if (affectations.isEmpty()) {
@@ -68,7 +68,23 @@ public class PlanningServiceImpl implements PlanningService {
         }
 
         ensureSallesExistent();
-        List<Salle> salles = salleDao.findAll();
+        List<Salle> allSalles = salleDao.findAll();
+        List<Salle> salles = new ArrayList<>();
+        if (selectedSalles == null || selectedSalles.isEmpty()) {
+            salles.addAll(allSalles);
+        } else {
+            for (Salle s : allSalles) {
+                if (selectedSalles.contains(s.getId_salle())) {
+                    salles.add(s);
+                }
+            }
+        }
+        
+        if (salles.isEmpty()) {
+            log.add("❌ Aucune salle sélectionnée ou disponible.");
+            return Collections.emptyList();
+        }
+        
         buildColorMap(allProfs);
 
         // Reset old planning

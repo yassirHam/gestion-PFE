@@ -233,8 +233,8 @@ public class PfeServiceImpl implements PfeService {
     // ── Planning delegation ──────────────────────────────────────────────────
 
     @Override
-    public List<Soutenance> genererPlanning(List<String> debugLog) {
-        return planningService.genererPlanning(debugLog);
+    public List<Soutenance> genererPlanning(List<String> debugLog, List<Long> selectedSalles) {
+        return planningService.genererPlanning(debugLog, selectedSalles);
     }
 
     @Override
@@ -250,5 +250,21 @@ public class PfeServiceImpl implements PfeService {
     @Override
     public void deletePlanning() {
         planningService.deletePlanning();
+    }
+
+    @Override
+    public List<entities.Salle> getAllSalles() {
+        dao.SalleDAO salleDao = new dao.SalleDAOImpl();
+        return salleDao.findAll();
+    }
+
+    @Override
+    public void addSalle(String numSalle) {
+        dao.SalleDAO salleDao = new dao.SalleDAOImpl();
+        entities.Salle s = new entities.Salle();
+        s.setNum_salle(numSalle);
+        s.setBlock("Bloc Principal");
+        s.setStatus("Libre");
+        salleDao.save(s);
     }
 }

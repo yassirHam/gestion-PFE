@@ -41,8 +41,12 @@ public interface PfeService {
     int getTotalSoutenances(List<String> filieresFiltre);
 
     // Planning operations
-    List<Soutenance> genererPlanning(List<String> debugLog);
+    List<Soutenance> genererPlanning(List<String> debugLog, List<Long> selectedSalles);
     List<Soutenance> getAllSoutenances();
     Map<Long, String> getProfessorColors();
     void deletePlanning();
+
+    // Salles operations
+    List<entities.Salle> getAllSalles();
+    void addSalle(String numSalle);
 }

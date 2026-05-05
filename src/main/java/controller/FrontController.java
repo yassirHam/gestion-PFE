@@ -113,6 +113,12 @@ public class FrontController extends HttpServlet {
             case "/lancerPlanning.do":
                 doLancerPlanning(req, resp);
                 break;
+            case "/addSalle.do":
+                doAddSalle(req, resp);
+                break;
+            case "/downloadHistory.do":
+                doDownloadHistory(req, resp);
+                break;
             case "/planningPdf.do":
                 doPlanningPdf(req, resp);
                 break;
@@ -709,8 +715,61 @@ public class FrontController extends HttpServlet {
         // Pass whether affectations exist
         boolean hasAffectations = service.getTotalEtudiantsAffectes(null) > 0;
         req.setAttribute("hasAffectations", hasAffectations);
+
+        // Pass all Salles
+        List<entities.Salle> salles = service.getAllSalles();
+        req.setAttribute("salles", salles);
         
+        // Load History
+        java.io.File historyDir = new java.io.File(getHistoryFolder());
+        List<String> historyFiles = new ArrayList<>();
+        if (historyDir.exists() && historyDir.isDirectory()) {
+            java.io.File[] files = historyDir.listFiles();
+            if (files != null) {
+                for (java.io.File f : files) {
+                    if (f.isFile() && f.getName().startsWith("Planning_")) {
+                        historyFiles.add(f.getName());
+                    }
+                }
+            }
+        }
+        Collections.sort(historyFiles, Collections.reverseOrder());
+        req.setAttribute("historyFiles", historyFiles);
+
         req.getRequestDispatcher("planning.jsp").forward(req, resp);
+    }
+    
+    private String getHistoryFolder() {
+        return System.getProperty("user.home") + java.io.File.separator + "plannings_history";
+    }
+
+    private void doDownloadHistory(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        String filename = req.getParameter("file");
+        if (filename == null || filename.contains("..") || !filename.startsWith("Planning_")) {
+            resp.sendError(HttpServletResponse.SC_BAD_REQUEST);
+            return;
+        }
+        java.io.File file = new java.io.File(getHistoryFolder(), filename);
+        if (!file.exists()) {
+            resp.sendError(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        if (filename.endsWith(".pdf")) {
+            resp.setContentType("application/pdf");
+        } else if (filename.endsWith(".docx")) {
+            resp.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        }
+        resp.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
+        java.nio.file.Files.copy(file.toPath(), resp.getOutputStream());
+    }
+
+    private void doAddSalle(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+        String numSalle = req.getParameter("numSalle");
+        if (numSalle != null && !numSalle.trim().isEmpty()) {
+            service.addSalle(numSalle.trim());
+        }
+        resp.sendRedirect("planning.do");
     }
 
     private void doLancerPlanning(HttpServletRequest req, HttpServletResponse resp)
@@ -722,8 +781,16 @@ public class FrontController extends HttpServlet {
             return;
         }
 
+        String[] selected = req.getParameterValues("selectedSalles");
+        List<Long> selectedSalles = new ArrayList<>();
+        if (selected != null) {
+            for (String sId : selected) {
+                try { selectedSalles.add(Long.parseLong(sId)); } catch (Exception ignored) {}
+            }
+        }
+
         List<String> debug = new ArrayList<>();
-        service.genererPlanning(debug);
+        service.genererPlanning(debug, selectedSalles);
 
         List<Soutenance> soutenances = service.getAllSoutenances();
         Map<Long, String> colors = service.getProfessorColors();
@@ -740,21 +807,39 @@ public class FrontController extends HttpServlet {
 
         req.setAttribute("hasAffectations", true);
         req.setAttribute("planningDone", true);
-        req.setAttribute("debug", debug);
+        
+        // Auto-save history files
+        java.io.File historyDir = new java.io.File(getHistoryFolder());
+        if (!historyDir.exists()) historyDir.mkdirs();
+        
+        String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
+        String pdfName = "Planning_" + timestamp + ".pdf";
+        String docxName = "Planning_" + timestamp + ".docx";
+        
+        try (java.io.FileOutputStream pdfOut = new java.io.FileOutputStream(new java.io.File(historyDir, pdfName));
+             java.io.FileOutputStream docxOut = new java.io.FileOutputStream(new java.io.File(historyDir, docxName))) {
+            generatePdfToStream(pdfOut);
+            generateDocxToStream(docxOut);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        
         req.getRequestDispatcher("planning.jsp").forward(req, resp);
     }
 
     // ── Planning PDF export ───────────────────────────────────────────────────
     private void doPlanningPdf(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
+        resp.setContentType("application/pdf");
+        resp.setHeader("Content-Disposition", "attachment; filename=planning_soutenances.pdf");
+        generatePdfToStream(resp.getOutputStream());
+    }
 
+    private void generatePdfToStream(java.io.OutputStream os) throws IOException {
         List<Soutenance> soutenances = service.getAllSoutenances();
         Map<Long, String> colorMap   = service.getProfessorColors();
 
-        resp.setContentType("application/pdf");
-        resp.setHeader("Content-Disposition", "attachment; filename=planning_soutenances.pdf");
-
-        PdfWriter   writer = new PdfWriter(resp.getOutputStream());
+        PdfWriter   writer = new PdfWriter(os);
         PdfDocument pdf    = new PdfDocument(writer);
         pdf.setDefaultPageSize(PageSize.A4.rotate());
         com.itextpdf.layout.Document doc = new com.itextpdf.layout.Document(pdf);
@@ -859,12 +944,14 @@ public class FrontController extends HttpServlet {
     // ── Planning DOCX export ──────────────────────────────────────────────────
     private void doPlanningDocx(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
-
-        List<Soutenance> soutenances = service.getAllSoutenances();
-        Map<Long, String> colorMap   = service.getProfessorColors();
-
         resp.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
         resp.setHeader("Content-Disposition", "attachment; filename=planning_soutenances.docx");
+        generateDocxToStream(resp.getOutputStream());
+    }
+
+    private void generateDocxToStream(java.io.OutputStream os) throws IOException {
+        List<Soutenance> soutenances = service.getAllSoutenances();
+        Map<Long, String> colorMap   = service.getProfessorColors();
 
         try (XWPFDocument doc = new XWPFDocument()) {
             // Landscape A4
@@ -935,7 +1022,7 @@ public class FrontController extends HttpServlet {
                 setCellDocx(row.getCell(9), filiere, filColor, false, false, 8);
             }
 
-            doc.write(resp.getOutputStream());
+            doc.write(os);
         }
     }
 }

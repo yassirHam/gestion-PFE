@@ -739,7 +739,7 @@ public class FrontController extends HttpServlet {
         if ("TDIA".equals(filiere)) return C_TDIA_DOCX;
         return C_EMPTY_DOCX;
     }
-
+    
     private String filiereColorDocxAffectation(String filiere) {
         if ("GI".equals(filiere))   return C_GI_DOCX_LIGHT;
         if ("ID".equals(filiere))   return C_ID_DOCX_LIGHT;
@@ -985,7 +985,7 @@ public class FrontController extends HttpServlet {
         doc.add(new Paragraph("Planning des soutenances des Projets de Fin d'Etude")
                 .setFont(bold).setFontSize(10)
                 .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
-        doc.add(new Paragraph("(Première Session) — Année Universitaire 2024/2025")
+        doc.add(new Paragraph("(Première Session) — Année Universitaire 2025/2026")
                 .setFont(normal).setFontSize(9)
                 .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
                 .setMarginBottom(8));
@@ -1115,7 +1115,7 @@ public class FrontController extends HttpServlet {
             center(doc, "École Nationale des Sciences Appliquées – Al Hoceima", 14, true);
             center(doc, "Département Mathématiques et Informatique", 12, false);
             center(doc, "Planning des soutenances des Projets de Fin d'Etude", 11, true);
-            center(doc, "(Première Session) — Année Universitaire 2024/2025", 10, false);
+            center(doc, "(Première Session) — Année Universitaire 2025/2026", 10, false);
             doc.createParagraph();
 
             // 10 columns

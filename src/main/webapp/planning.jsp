@@ -77,36 +77,27 @@
 
     <!-- Main Card -->
     <div class="card p-4">
-        <div class="text-center py-5">
-            <c:choose>
-                <c:when test="${not empty soutenances}">
-                    <!-- Planning existe -->
-                    <i class="fa-solid fa-circle-check fa-4x text-success mb-3"></i>
-                    <h4 class="mb-2">Le planning a été généré avec succès !</h4>
-                    <p class="text-muted mb-4">
-                        ${soutenances.size()} soutenances ont été planifiées. Vous pouvez télécharger le résultat ci-dessous.
-                    </p>
-                </c:when>
-                <c:otherwise>
-                    <!-- Aucun planning -->
-                    <i class="fa-regular fa-calendar-xmark fa-4x text-muted mb-3"></i>
-                    <h4 class="mb-2">Aucun planning généré</h4>
-                    <p class="text-muted mb-4">
-                        Cliquez sur le bouton ci-dessous pour lancer l'algorithme d'affectation des jurys, salles et créneaux horaires.
-                    </p>
-                </c:otherwise>
-            </c:choose>
+        <c:choose>
+            <c:when test="${not empty soutenances}">
 
-            <div class="d-flex justify-content-center gap-3 flex-wrap mt-4">
-                <!-- Bouton Générer -->
-                <form action="lancerPlanning.do" method="post" onsubmit="return confirm('Générer un nouveau planning ? L\'ancien sera remplacé.')">
-                    <button type="submit" class="btn btn-primary px-4 py-2" ${!hasAffectations ? 'disabled' : ''}>
-                        <i class="fa-solid fa-wand-magic-sparkles me-2"></i>Générer le Planning
-                    </button>
-                </form>
+                <!-- Légende des créneaux horaires -->
+                <h6 class="text-muted mb-3"><i class="fa-solid fa-palette me-2"></i>Légende des créneaux horaires</h6>
+                <div class="d-flex flex-wrap gap-2 mb-4">
+                    <span class="badge fs-6 fw-normal px-3 py-2" style="background-color:#CFE2FF; color:#333;">09h00</span>
+                    <span class="badge fs-6 fw-normal px-3 py-2" style="background-color:#D9EAD3; color:#333;">10h00</span>
+                    <span class="badge fs-6 fw-normal px-3 py-2" style="background-color:#FFF3CD; color:#333;">11h00</span>
+                    <span class="badge fs-6 fw-normal px-3 py-2" style="background-color:#F8D7DA; color:#333;">14h00</span>
+                    <span class="badge fs-6 fw-normal px-3 py-2" style="background-color:#E2D9F3; color:#333;">15h00</span>
+                    <span class="badge fs-6 fw-normal px-3 py-2" style="background-color:#FFE5CC; color:#333;">16h00</span>
+                </div>
 
-                <!-- Boutons Télécharger -->
-                <c:if test="${not empty soutenances}">
+                <p class="text-muted small mb-4">
+                    <i class="fa-solid fa-info-circle me-1"></i>
+                    ${soutenances.size()} soutenances planifiées. Téléchargez le fichier pour voir le détail complet.
+                </p>
+
+                <!-- Boutons télécharger -->
+                <div class="d-flex gap-3 flex-wrap">
                     <form action="planningPdf.do" method="post">
                         <button type="submit" class="btn btn-danger px-4 py-2">
                             <i class="fa-solid fa-file-pdf me-2"></i>Télécharger PDF
@@ -117,16 +108,38 @@
                             <i class="fa-solid fa-file-word me-2"></i>Télécharger Word
                         </button>
                     </form>
-                </c:if>
-            </div>
-            
-            <c:if test="${not hasAffectations}">
-                <div class="alert alert-warning mt-4 d-inline-block text-start">
-                    <i class="fa-solid fa-triangle-exclamation me-2"></i>
-                    <strong>Attention :</strong> Impossible de générer le planning car aucune affectation n'a été trouvée. Veuillez d'abord réaliser l'affectation.
+                    <form action="lancerPlanning.do" method="post" class="ms-auto"
+                          onsubmit="return confirm('Régénérer le planning ? L\'ancien sera remplacé.')">
+                        <button type="submit" class="btn btn-outline-secondary px-4 py-2">
+                            <i class="fa-solid fa-rotate me-2"></i>Régénérer
+                        </button>
+                    </form>
                 </div>
-            </c:if>
-        </div>
+
+            </c:when>
+            <c:otherwise>
+                <!-- Aucun planning -->
+                <div class="text-center py-5">
+                    <i class="fa-regular fa-calendar-xmark fa-4x text-muted mb-3"></i>
+                    <h5 class="mb-2">Aucun planning généré</h5>
+                    <p class="text-muted mb-4">
+                        Cliquez sur le bouton ci-dessous pour lancer l'algorithme d'affectation des jurys, salles et créneaux horaires.
+                    </p>
+                    <form action="lancerPlanning.do" method="post"
+                          onsubmit="return confirm('Générer le planning ?')">
+                        <button type="submit" class="btn btn-primary px-4 py-2" ${!hasAffectations ? 'disabled' : ''}>
+                            <i class="fa-solid fa-wand-magic-sparkles me-2"></i>Générer le Planning
+                        </button>
+                    </form>
+                    <c:if test="${not hasAffectations}">
+                        <div class="alert alert-warning mt-4 d-inline-block text-start">
+                            <i class="fa-solid fa-triangle-exclamation me-2"></i>
+                            <strong>Attention :</strong> Veuillez d'abord réaliser l'affectation avant de générer le planning.
+                        </div>
+                    </c:if>
+                </div>
+            </c:otherwise>
+        </c:choose>
     </div>
 
     <!-- Log de génération -->

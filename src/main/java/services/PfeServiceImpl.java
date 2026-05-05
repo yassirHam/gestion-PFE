@@ -12,6 +12,7 @@ import entities.Affectation;
 import entities.Etudiant;
 import entities.FichierListe;
 import entities.Professeur;
+import entities.Soutenance;
 
 import java.util.*;
 
@@ -21,6 +22,7 @@ public class PfeServiceImpl implements PfeService {
     private final EtudiantDAO etuDao = new EtudiantDAOImpl();
     private final ProfesseurDAO profDao = new ProfesseurDAOImpl();
     private final FichierListeDAO fichierDao = new FichierListeDAOImpl();
+    private final PlanningService planningService = new PlanningServiceImpl();
 
     @Override
     public void saveEtudiants(List<Etudiant> etudiants, String filiere, String fileName) {
@@ -168,5 +170,27 @@ public class PfeServiceImpl implements PfeService {
     @Override
     public int getTotalProfesseursEncadrants() {
         return getEtudiantsParProf().size();
+    }
+
+    // ── Planning delegation ──────────────────────────────────────────────────
+
+    @Override
+    public List<Soutenance> genererPlanning(List<String> debugLog) {
+        return planningService.genererPlanning(debugLog);
+    }
+
+    @Override
+    public List<Soutenance> getAllSoutenances() {
+        return planningService.getAllSoutenances();
+    }
+
+    @Override
+    public Map<Long, String> getProfessorColors() {
+        return planningService.getProfessorColors();
+    }
+
+    @Override
+    public void deletePlanning() {
+        planningService.deletePlanning();
     }
 }

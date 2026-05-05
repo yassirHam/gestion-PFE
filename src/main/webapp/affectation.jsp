@@ -37,6 +37,9 @@
                     <a class="nav-link active" href="affectation.do"><i class="fa-solid fa-users me-1"></i> Affectation</a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link" href="planning.do"><i class="fa-solid fa-calendar-days me-1"></i> Planning</a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link" href="dashboard.do"><i class="fa-solid fa-chart-pie me-1"></i> Dashboard</a>
                 </li>
             </ul>
@@ -147,23 +150,28 @@
         <div class="alert alert-success text-center mt-4">
             <h5>Affectation effectuée avec succès</h5>
             <p>
-                Les affectations ont été enregistrées en base. Vous pouvez exporter le résultat.
+                Les affectations ont été enregistrées en base. Vous pouvez exporter le résultat
+                ou générer le planning des soutenances.
             </p>
 
-            <div class="mt-3">
+            <div class="mt-3 d-flex flex-wrap gap-2 justify-content-center">
                 <form action="exportPdf.do" method="post" class="d-inline"
                       onsubmit="return confirm('Voulez-vous télécharger le rapport au format PDF ?')">
                     <button class="btn btn-danger">
-                        Télécharger PDF
+                        <i class="fa-solid fa-file-pdf me-1"></i>Télécharger PDF
                     </button>
                 </form>
 
                 <form action="exportDocx.do" method="post" class="d-inline"
                       onsubmit="return confirm('Voulez-vous télécharger le rapport au format Word ?')">
                     <button class="btn btn-primary">
-                        Télécharger Word
+                        <i class="fa-solid fa-file-word me-1"></i>Télécharger Word
                     </button>
                 </form>
+
+                <a href="planning.do" class="btn btn-success">
+                    <i class="fa-solid fa-calendar-check me-1"></i>Voir / Générer le Planning
+                </a>
             </div>
         </div>
     </c:if>

@@ -316,9 +316,14 @@ public class FrontController extends HttpServlet {
 
     // Couleurs PDF — valeurs float (0-1) pour iText 7
     private static final DeviceRgb COLOR_HEADER = new DeviceRgb(0.000f, 0.000f, 0.000f); // Black
+    // Dark colors for Planning
     private static final DeviceRgb COLOR_GI     = new DeviceRgb(0.400f, 0.600f, 0.900f); // Darker Blue
     private static final DeviceRgb COLOR_ID     = new DeviceRgb(0.950f, 0.800f, 0.300f); // Darker Yellow
     private static final DeviceRgb COLOR_TDIA   = new DeviceRgb(0.450f, 0.750f, 0.450f); // Darker Green
+    // Light colors for Affectation
+    private static final DeviceRgb COLOR_GI_LIGHT     = new DeviceRgb(0.812f, 0.886f, 1.000f); // #CFE2FF
+    private static final DeviceRgb COLOR_ID_LIGHT     = new DeviceRgb(1.000f, 0.953f, 0.804f); // #FFF3CD
+    private static final DeviceRgb COLOR_TDIA_LIGHT   = new DeviceRgb(0.851f, 0.918f, 0.827f); // #D9EAD3
     private static final DeviceRgb COLOR_EMPTY  = new DeviceRgb(0.950f, 0.950f, 0.950f);
 
     @SuppressWarnings("unchecked")
@@ -365,9 +370,9 @@ public class FrontController extends HttpServlet {
                 .setHorizontalAlignment(com.itextpdf.layout.properties.HorizontalAlignment.CENTER)
                 .setMarginBottom(10);
 
-        legend.addCell(legendCell("Filière ID", COLOR_ID, normal));
-        legend.addCell(legendCell("Filière GI", COLOR_GI, normal));
-        legend.addCell(legendCell("Filière TDIA", COLOR_TDIA, normal));
+        legend.addCell(legendCell("Filière ID", COLOR_ID_LIGHT, normal));
+        legend.addCell(legendCell("Filière GI", COLOR_GI_LIGHT, normal));
+        legend.addCell(legendCell("Filière TDIA", COLOR_TDIA_LIGHT, normal));
         doc.add(legend);
 
         Map<Professeur, List<Etudiant>> map = new LinkedHashMap<>();
@@ -407,7 +412,7 @@ public class FrontController extends HttpServlet {
             for (int i = 0; i < maxStudents; i++) {
                 if (i < list.size()) {
                     Etudiant e = list.get(i);
-                    DeviceRgb color = filiereColorPdf(e.getFiliere());
+                    DeviceRgb color = filiereColorPdfAffectation(e.getFiliere());
                     table.addCell(etuCell(e.getNomE(),    normal, color));
                     table.addCell(etuCell(e.getPrenomE(), normal, color));
                 } else {
@@ -475,11 +480,23 @@ public class FrontController extends HttpServlet {
         return COLOR_EMPTY;
     }
 
+    private DeviceRgb filiereColorPdfAffectation(String filiere) {
+        if ("GI".equals(filiere))   return COLOR_GI_LIGHT;
+        if ("ID".equals(filiere))   return COLOR_ID_LIGHT;
+        if ("TDIA".equals(filiere)) return COLOR_TDIA_LIGHT;
+        return COLOR_EMPTY;
+    }
+
     // Couleurs DOCX — hex RGB sans #
     private static final String C_HEADER_DOCX = "000000"; // Black
+    // Dark colors for Planning
     private static final String C_GI_DOCX     = "4F8AFF"; // Darker Blue
     private static final String C_ID_DOCX     = "FFC107"; // Darker Yellow
     private static final String C_TDIA_DOCX   = "689F38"; // Darker Green
+    // Light colors for Affectation
+    private static final String C_GI_DOCX_LIGHT     = "CFE2FF"; // bleu clair
+    private static final String C_ID_DOCX_LIGHT     = "FFF3CD"; // jaune clair
+    private static final String C_TDIA_DOCX_LIGHT   = "D9EAD3"; // vert clair
     private static final String C_EMPTY_DOCX  = "F0F0F0";
     private static final String C_WHITE_DOCX  = "FFFFFF";
 
@@ -523,9 +540,9 @@ public class FrontController extends HttpServlet {
 
             XWPFTable legend = doc.createTable(1, 3);
             setWidth(legend, 4000);
-            setLegendCellDocx(legend.getRow(0).getCell(0), "Filière ID",   C_ID_DOCX);
-            setLegendCellDocx(legend.getRow(0).getCell(1), "Filière GI",   C_GI_DOCX);
-            setLegendCellDocx(legend.getRow(0).getCell(2), "Filière TDIA", C_TDIA_DOCX);
+            setLegendCellDocx(legend.getRow(0).getCell(0), "Filière ID",   C_ID_DOCX_LIGHT);
+            setLegendCellDocx(legend.getRow(0).getCell(1), "Filière GI",   C_GI_DOCX_LIGHT);
+            setLegendCellDocx(legend.getRow(0).getCell(2), "Filière TDIA", C_TDIA_DOCX_LIGHT);
             doc.createParagraph();
 
             Map<Professeur, List<Etudiant>> map = new LinkedHashMap<>();
@@ -577,7 +594,7 @@ public class FrontController extends HttpServlet {
                         Etudiant e = list.get(i);
                         nom    = e.getNomE();
                         prenom = e.getPrenomE();
-                        color  = filiereColorDocx(e.getFiliere());
+                        color  = filiereColorDocxAffectation(e.getFiliere());
                     }
 
                     setCellDocx(row.getCell(i * 2 + 2), nom,    color, false, false, 8);
@@ -668,6 +685,13 @@ public class FrontController extends HttpServlet {
         if ("GI".equals(filiere))   return C_GI_DOCX;
         if ("ID".equals(filiere))   return C_ID_DOCX;
         if ("TDIA".equals(filiere)) return C_TDIA_DOCX;
+        return C_EMPTY_DOCX;
+    }
+
+    private String filiereColorDocxAffectation(String filiere) {
+        if ("GI".equals(filiere))   return C_GI_DOCX_LIGHT;
+        if ("ID".equals(filiere))   return C_ID_DOCX_LIGHT;
+        if ("TDIA".equals(filiere)) return C_TDIA_DOCX_LIGHT;
         return C_EMPTY_DOCX;
     }
 

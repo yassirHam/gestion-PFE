@@ -269,19 +269,33 @@ public class PlanningServiceImpl implements PlanningService {
 
     private Professeur[] pickBestJury(Professeur encadrant, List<Professeur> available, Map<Long, Integer> profJuryCount) {
         boolean encadrantIsInfo = isInfo(encadrant);
-        // Sort by participation count (ascending) to maintain equity
-        available.sort(Comparator.comparingInt(p -> profJuryCount.getOrDefault(p.getIdp(), 0)));
 
+        // Sort by participation count (ascending) to maintain equity + inject small random
+        // factor so same-count profs don't always come in the same order
+        available.sort(Comparator.comparingInt((Professeur p) -> profJuryCount.getOrDefault(p.getIdp(), 0))
+                .thenComparingInt(p -> (int)(Math.random() * 1000)));
+
+        // ── Constraint: at least 2 out of 3 jury members must be Informatique ──
+        // Case A: encadrant is NOT info → both rapporteurs MUST be info (2 + 0 = 2 total)
+        // Case B: encadrant IS info → at least 1 rapporteur must be info (1 + 1 = 2 total)
+
+        // First pass: strict — prefer the pair that satisfies the rule and both have lowest load
         for (int i = 0; i < available.size(); i++) {
             for (int j = i + 1; j < available.size(); j++) {
                 Professeur p1 = available.get(i);
                 Professeur p2 = available.get(j);
-                
-                // Requirement: At least 1 prof in the 3-person jury must be Informatique
-                if (!encadrantIsInfo && !isInfo(p1) && !isInfo(p2)) continue;
-                
-                return new Professeur[]{p1, p2};
+
+                int infoCount = (encadrantIsInfo ? 1 : 0) + (isInfo(p1) ? 1 : 0) + (isInfo(p2) ? 1 : 0);
+                if (infoCount >= 2) {
+                    return new Professeur[]{p1, p2};
+                }
             }
+        }
+
+        // Fallback: constraint cannot be met (not enough info profs available at this slot).
+        // Accept the best possible pair to avoid leaving a student unscheduled.
+        if (available.size() >= 2) {
+            return new Professeur[]{available.get(0), available.get(1)};
         }
         return null;
     }

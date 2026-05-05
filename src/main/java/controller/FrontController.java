@@ -772,7 +772,6 @@ public class FrontController extends HttpServlet {
             case 4: return new DeviceRgb(0.65f, 0.55f, 0.50f); // Brown
             default: return COLOR_EMPTY;
         }
-        
     }
 
     private String getDateColorDocx(java.util.Date d) {

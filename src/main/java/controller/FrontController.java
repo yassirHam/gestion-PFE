@@ -682,6 +682,62 @@ public class FrontController extends HttpServlet {
         return COLOR_EMPTY;
     }
 
+    private DeviceRgb getDateColorPdf(java.util.Date d) {
+        if (d == null) return COLOR_EMPTY;
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        cal.setTime(d);
+        int day = cal.get(java.util.Calendar.DAY_OF_MONTH);
+        // Discrete colors for different days
+        switch (day % 4) {
+            case 0: return new DeviceRgb(255, 235, 238); // Reddish
+            case 1: return new DeviceRgb(232, 245, 233); // Greenish
+            case 2: return new DeviceRgb(227, 242, 253); // Bluish
+            case 3: return new DeviceRgb(255, 243, 224); // Orangish
+            default: return COLOR_EMPTY;
+        }
+    }
+
+    private DeviceRgb getSalleColorPdf(String salle) {
+        if (salle == null) return COLOR_EMPTY;
+        int hash = Math.abs(salle.hashCode());
+        // Dynamic colors based on room name
+        switch (hash % 5) {
+            case 0: return new DeviceRgb(243, 229, 245); // Purple
+            case 1: return new DeviceRgb(224, 242, 241); // Teal
+            case 2: return new DeviceRgb(252, 228, 236); // Pink
+            case 3: return new DeviceRgb(255, 253, 231); // Yellow
+            case 4: return new DeviceRgb(239, 235, 233); // Brown
+            default: return COLOR_EMPTY;
+        }
+    }
+
+    private String getDateColorDocx(java.util.Date d) {
+        if (d == null) return C_EMPTY_DOCX;
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        cal.setTime(d);
+        int day = cal.get(java.util.Calendar.DAY_OF_MONTH);
+        switch (day % 4) {
+            case 0: return "FFEBEE";
+            case 1: return "E8F5E9";
+            case 2: return "E3F2FD";
+            case 3: return "FFF3E0";
+            default: return C_EMPTY_DOCX;
+        }
+    }
+
+    private String getSalleColorDocx(String salle) {
+        if (salle == null) return C_EMPTY_DOCX;
+        int hash = Math.abs(salle.hashCode());
+        switch (hash % 5) {
+            case 0: return "F3E5F5";
+            case 1: return "E0F2F1";
+            case 2: return "FCE4EC";
+            case 3: return "FFFDE7";
+            case 4: return "EFEBE9";
+            default: return C_EMPTY_DOCX;
+        }
+    }
+
     private String getHeureColorDocx(String heure) {
         if (heure == null) return C_EMPTY_DOCX;
         if (heure.contains("9h")) return "CFE2FF";
@@ -891,7 +947,9 @@ public class FrontController extends HttpServlet {
             DeviceRgb m1Color  = hexToRgb(colorMap.getOrDefault(m1.getIdp(),  "2ECC71"));
             DeviceRgb m2Color  = hexToRgb(colorMap.getOrDefault(m2.getIdp(),  "E67E22"));
             DeviceRgb filColor = filiereColorPdf(filiere);
+            DeviceRgb dateColor = getDateColorPdf(s.getDate());
             DeviceRgb timeColor = getHeureColorPdf(s.getHeure());
+            DeviceRgb salleColor = getSalleColorPdf(s.getSalle().getNum_salle());
 
             // ID
             table.addCell(planCell(String.valueOf(id++), normal, 8, COLOR_EMPTY, false));
@@ -902,15 +960,15 @@ public class FrontController extends HttpServlet {
             // Jury 2
             table.addCell(planCell(m2.getNom() + " " + m2.getPrenom(), normal, 8, m2Color, true));
             // Date
-            table.addCell(planCell(sdf.format(s.getDate()), normal, 8, filColor, false));
+            table.addCell(planCell(sdf.format(s.getDate()), normal, 8, dateColor, false));
             // Heure
             table.addCell(planCell(s.getHeure(), bold, 8, timeColor, false));
             // Salle
-            table.addCell(planCell(s.getSalle().getNum_salle(), normal, 8, filColor, false));
+            table.addCell(planCell(s.getSalle().getNum_salle(), normal, 8, salleColor, false));
             // Nom étudiant
-            table.addCell(planCell(s.getEtudiant().getNomE(), normal, 8, COLOR_EMPTY, false));
+            table.addCell(planCell(s.getEtudiant().getNomE(), normal, 8, filColor, false));
             // Prénom étudiant
-            table.addCell(planCell(s.getEtudiant().getPrenomE(), normal, 8, COLOR_EMPTY, false));
+            table.addCell(planCell(s.getEtudiant().getPrenomE(), normal, 8, filColor, false));
             // Filière
             table.addCell(planCell(filiere, normal, 8, filColor, false));
         }
@@ -995,7 +1053,9 @@ public class FrontController extends HttpServlet {
                 String m1Color  = colorMap.getOrDefault(m1.getIdp(),  "2ECC71");
                 String m2Color  = colorMap.getOrDefault(m2.getIdp(),  "E67E22");
                 String filColor = filiereColorDocx(filiere);
+                String dateColor = getDateColorDocx(s.getDate());
                 String timeColor = getHeureColorDocx(s.getHeure());
+                String salleColor = getSalleColorDocx(s.getSalle().getNum_salle());
 
                 XWPFTableRow row = table.createRow();
                 while (row.getTableCells().size() < headers.length) row.addNewTableCell();
@@ -1009,15 +1069,15 @@ public class FrontController extends HttpServlet {
                 // Jury 2
                 setCellDocx(row.getCell(3), m2.getNom() + " " + m2.getPrenom(), m2Color, true, false, 8);
                 // Date
-                setCellDocx(row.getCell(4), sdf.format(s.getDate()), filColor, false, false, 8);
+                setCellDocx(row.getCell(4), sdf.format(s.getDate()), dateColor, false, false, 8);
                 // Heure
                 setCellDocx(row.getCell(5), s.getHeure(), timeColor, false, true, 8);
                 // Salle
-                setCellDocx(row.getCell(6), s.getSalle().getNum_salle(), filColor, false, false, 8);
+                setCellDocx(row.getCell(6), s.getSalle().getNum_salle(), salleColor, false, false, 8);
                 // Nom
-                setCellDocx(row.getCell(7), s.getEtudiant().getNomE(), C_EMPTY_DOCX, false, false, 8);
+                setCellDocx(row.getCell(7), s.getEtudiant().getNomE(), filColor, false, false, 8);
                 // Prénom
-                setCellDocx(row.getCell(8), s.getEtudiant().getPrenomE(), C_EMPTY_DOCX, false, false, 8);
+                setCellDocx(row.getCell(8), s.getEtudiant().getPrenomE(), filColor, false, false, 8);
                 // Filière
                 setCellDocx(row.getCell(9), filiere, filColor, false, false, 8);
             }

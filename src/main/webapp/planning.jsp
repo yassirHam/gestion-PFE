@@ -212,7 +212,6 @@
                     </div>
 
                     <button type="submit" class="btn btn-primary w-100" ${!hasAffectations ? 'disabled' : ''}>
-                        <i class="fa-solid fa-wand-magic-sparkles me-2"></i>
                         <c:choose>
                             <c:when test="${not empty soutenances}">Régénérer le Planning</c:when>
                             <c:otherwise>Générer le Planning</c:otherwise>

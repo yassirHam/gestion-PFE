@@ -315,7 +315,7 @@ public class FrontController extends HttpServlet {
     }
 
     // Couleurs PDF — valeurs float (0-1) pour iText 7
-    private static final DeviceRgb COLOR_HEADER = new DeviceRgb(0.102f, 0.337f, 0.859f); // #1A56DB
+    private static final DeviceRgb COLOR_HEADER = new DeviceRgb(0.000f, 0.000f, 0.000f); // Black
     private static final DeviceRgb COLOR_GI     = new DeviceRgb(0.812f, 0.886f, 1.000f); // #CFE2FF
     private static final DeviceRgb COLOR_ID     = new DeviceRgb(1.000f, 0.953f, 0.804f); // #FFF3CD
     private static final DeviceRgb COLOR_TDIA   = new DeviceRgb(0.851f, 0.918f, 0.827f); // #D9EAD3
@@ -476,7 +476,7 @@ public class FrontController extends HttpServlet {
     }
 
     // Couleurs DOCX — hex RGB sans #
-    private static final String C_HEADER_DOCX = "1A56DB"; // bleu
+    private static final String C_HEADER_DOCX = "000000"; // Black
     private static final String C_GI_DOCX     = "CFE2FF"; // bleu clair
     private static final String C_ID_DOCX     = "FFF3CD"; // jaune clair
     private static final String C_TDIA_DOCX   = "D9EAD3"; // vert clair

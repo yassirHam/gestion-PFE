@@ -94,9 +94,9 @@
                             <div class="col-md-5">
                                 <h6 class="text-muted mb-3"><i class="fa-solid fa-graduation-cap me-2"></i>Légende des filières</h6>
                                 <div class="d-flex flex-wrap gap-2 mb-3">
-                                    <span class="badge fw-normal px-2 py-1 text-dark" style="background-color:#CFE2FF;">GI</span>
-                                    <span class="badge fw-normal px-2 py-1 text-dark" style="background-color:#FFF3CD;">ID</span>
-                                    <span class="badge fw-normal px-2 py-1 text-dark" style="background-color:#D9EAD3;">TDIA</span>
+                                    <c:forEach var="entry" items="${filiereLegend}">
+                                        <span class="badge fw-normal px-2 py-1 text-white" style="background-color:#${entry.value};">${entry.key}</span>
+                                    </c:forEach>
                                 </div>
                                 
                                 <h6 class="text-muted mb-2"><i class="fa-solid fa-clock me-2"></i>Couleurs des heures</h6>

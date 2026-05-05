@@ -802,6 +802,15 @@ public class FrontController extends HttpServlet {
         }
         req.setAttribute("profLegend", profLegend);
 
+        Map<String, String> filiereLegend = new LinkedHashMap<>();
+        for (Soutenance s : soutenances) {
+            String filiere = s.getEtudiant().getFiliere();
+            if (!filiereLegend.containsKey(filiere)) {
+                filiereLegend.put(filiere, filiereColorDocx(filiere));
+            }
+        }
+        req.setAttribute("filiereLegend", filiereLegend);
+
         // Pass whether affectations exist
         boolean hasAffectations = service.getTotalEtudiantsAffectes(null) > 0;
         req.setAttribute("hasAffectations", hasAffectations);

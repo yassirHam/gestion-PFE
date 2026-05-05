@@ -256,8 +256,8 @@ public class PfeServiceImpl implements PfeService {
     // ── Planning delegation ──────────────────────────────────────────────────
 
     @Override
-    public List<Soutenance> genererPlanning(List<String> debugLog, List<Long> selectedSalles) {
-        return planningService.genererPlanning(debugLog, selectedSalles);
+    public List<Soutenance> genererPlanning(List<String> filieres, List<String> debugLog, List<Long> selectedSalles) {
+        return planningService.genererPlanning(filieres, debugLog, selectedSalles);
     }
 
     @Override

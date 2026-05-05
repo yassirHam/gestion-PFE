@@ -10,7 +10,7 @@ public interface PlanningService {
      * @param debugLog list to append log messages
      * @return list of generated soutenances
      */
-    List<Soutenance> genererPlanning(List<String> debugLog, List<Long> selectedSalles);
+    List<Soutenance> genererPlanning(List<String> filieres, List<String> debugLog, List<Long> selectedSalles);
 
     /**
      * Return all soutenances with full details (join-fetched).

@@ -53,17 +53,30 @@ public class PlanningServiceImpl implements PlanningService {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
-    public List<Soutenance> genererPlanning(List<String> log, List<Long> selectedSalles) {
+    public List<Soutenance> genererPlanning(List<String> filieres, List<String> log, List<Long> selectedSalles) {
 
-        List<Affectation> affectations = affDao.findAllWithDetails();
+        List<Affectation> allAffectations = affDao.findAllWithDetails();
+        // Filter by selected filières if provided
+        List<Affectation> affectations;
+        if (filieres != null && !filieres.isEmpty()) {
+            affectations = new ArrayList<>();
+            for (Affectation a : allAffectations) {
+                if (filieres.contains(a.getEtudiant().getFiliere())) {
+                    affectations.add(a);
+                }
+            }
+        } else {
+            affectations = allAffectations;
+        }
+
         if (affectations.isEmpty()) {
-            log.add("❌ Aucune affectation trouvée.");
+            log.add(" Aucune affectation trouvée pour les filières sélectionnées.");
             return Collections.emptyList();
         }
 
         List<Professeur> allProfs = profDao.findAll();
         if (allProfs.size() < 3) {
-            log.add("❌ Il faut au moins 3 professeurs.");
+            log.add(" Il faut au moins 3 professeurs.");
             return Collections.emptyList();
         }
 
@@ -81,7 +94,7 @@ public class PlanningServiceImpl implements PlanningService {
         }
         
         if (salles.isEmpty()) {
-            log.add("❌ Aucune salle sélectionnée ou disponible.");
+            log.add(" Aucune salle sélectionnée ou disponible.");
             return Collections.emptyList();
         }
         

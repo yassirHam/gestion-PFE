@@ -869,7 +869,12 @@ public class FrontController extends HttpServlet {
         }
 
         List<String> debug = new ArrayList<>();
-        service.genererPlanning(debug, selectedSalles);
+
+        // Retrieve the filières that were used for the last affectation
+        @SuppressWarnings("unchecked")
+        List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
+
+        service.genererPlanning(lastFilieres, debug, selectedSalles);
 
         List<Soutenance> soutenances = service.getAllSoutenances();
         Map<Long, String> colors = service.getProfessorColors();

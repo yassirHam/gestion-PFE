@@ -13,21 +13,8 @@
 
         .fichier-item {
             border: 1px solid #ddd;
-            border-radius: 8px;
-            padding: 8px 12px;
+            padding: 8px;
             background: #f8f9fa;
-        }
-
-        .download-section {
-            background: #f0fff4;
-            border: 2px solid #198754;
-            border-radius: 12px;
-            padding: 24px;
-            text-align: center;
-        }
-
-        .download-section h5 {
-            color: #198754;
         }
     </style>
 </head>
@@ -50,7 +37,7 @@
     </c:if>
 
     <!-- ================= UPLOAD ================= -->
-    <div class="card p-4 mb-4 shadow-sm">
+    <div class="card p-3 mb-4">
         <div class="row">
 
             <!-- ETUDIANTS -->
@@ -75,7 +62,7 @@
     </div>
 
     <!-- ================= LISTES ================= -->
-    <div class="card p-4 mb-4 shadow-sm">
+    <div class="card p-3 mb-4">
 
         <h5>Listes disponibles</h5>
 
@@ -112,7 +99,7 @@
                                 formaction="lancerAffectation.do"
                                 formmethod="post"
                                 class="btn btn-success"
-                                onclick="return confirm('⚠️ Lancer l\'affectation va écraser les affectations existantes pour les filières sélectionnées. Continuer ?')">
+                                onclick="return confirm('Confirmer le lancement de l\'affectation (cela écrasera les précédentes) ?')">
                             Lancer Affectation
                         </button>
 
@@ -134,28 +121,26 @@
 
     <!-- ================= TELECHARGEMENT APRES AFFECTATION ================= -->
     <c:if test="${affectationDone == true}">
-        <div class="download-section shadow-sm">
-            <h5>✅ Affectation effectuée avec succès !</h5>
-            <p class="text-muted mb-4">
-                Les affectations ont été enregistrées. Choisissez le format pour télécharger le rapport.
+        <div class="alert alert-success text-center mt-4">
+            <h5>Affectation effectuée avec succès</h5>
+            <p>
+                Les affectations ont été enregistrées en base. Vous pouvez exporter le résultat.
             </p>
 
-            <div class="d-flex justify-content-center gap-3">
-
+            <div class="mt-3">
                 <form action="exportPdf.do" method="post" class="d-inline"
-                      onsubmit="return confirm('📄 Vous allez télécharger le rapport PDF des affectations. Continuer ?')">
-                    <button class="btn btn-danger btn-lg">
-                        📄 Télécharger PDF
+                      onsubmit="return confirm('Voulez-vous télécharger le rapport au format PDF ?')">
+                    <button class="btn btn-danger">
+                        Télécharger PDF
                     </button>
                 </form>
 
                 <form action="exportDocx.do" method="post" class="d-inline"
-                      onsubmit="return confirm('📝 Vous allez télécharger le rapport Word (DOCX) des affectations. Continuer ?')">
-                    <button class="btn btn-primary btn-lg">
-                        📝 Télécharger Word
+                      onsubmit="return confirm('Voulez-vous télécharger le rapport au format Word ?')">
+                    <button class="btn btn-primary">
+                        Télécharger Word
                     </button>
                 </form>
-
             </div>
         </div>
     </c:if>

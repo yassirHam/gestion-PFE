@@ -263,6 +263,15 @@ public class FrontController extends HttpServlet {
         }
 
         // ── Algorithme fair + random ─────────────────────────────────────────
+        try (org.hibernate.Session session = util.HibernateUtil.getSessionFactory().openSession()) {
+            org.hibernate.Transaction tx = session.beginTransaction();
+            session.createMutationQuery(
+                "delete from Affectation a where a.etudiant.filiere in (:filieres)")
+                .setParameterList("filieres", filieres)
+                .executeUpdate();
+            tx.commit();
+        }
+
         // 1. Grouper les étudiants par filière
         Map<String, List<Etudiant>> byFiliere = new LinkedHashMap<>();
         for (Etudiant e : etudiants) {
@@ -360,15 +369,23 @@ public class FrontController extends HttpServlet {
             map.computeIfAbsent(a.getEncadrant(), k -> new ArrayList<>()).add(a.getEtudiant());
         }
 
-        float[] cols = {12, 12, 9, 9, 9, 9, 9, 9, 9, 9};
+        int maxStudents = 4;
+        for (List<Etudiant> l : map.values()) {
+            if (l.size() > maxStudents) maxStudents = l.size();
+        }
+
+        float[] cols = new float[2 + maxStudents * 2];
+        cols[0] = 12; cols[1] = 12;
+        for (int i = 2; i < cols.length; i++) cols[i] = 9;
+
         Table table = new Table(UnitValue.createPercentArray(cols)).useAllAvailableWidth();
 
         table.addHeaderCell(headerCell("Encadrant", bold, 2, false));
-        table.addHeaderCell(headerCell("Etudiants encadrés", bold, 8, false));
+        table.addHeaderCell(headerCell("Etudiants encadrés", bold, maxStudents * 2, false));
 
         table.addHeaderCell(subHeaderCell("Nom", bold));
         table.addHeaderCell(subHeaderCell("Prénom", bold));
-        for (int i = 1; i <= 4; i++) {
+        for (int i = 1; i <= maxStudents; i++) {
             table.addHeaderCell(subHeaderCell("Etudiant " + i + " - Nom", bold));
             table.addHeaderCell(subHeaderCell("Etudiant " + i + " - Prénom", bold));
         }
@@ -380,7 +397,7 @@ public class FrontController extends HttpServlet {
             table.addCell(profCell(prof.getNom(),    bold, COLOR_HEADER));
             table.addCell(profCell(prof.getPrenom(), bold, COLOR_HEADER));
 
-            for (int i = 0; i < 4; i++) {
+            for (int i = 0; i < maxStudents; i++) {
                 if (i < list.size()) {
                     Etudiant e = list.get(i);
                     DeviceRgb color = filiereColorPdf(e.getFiliere());
@@ -495,21 +512,26 @@ public class FrontController extends HttpServlet {
                 map.computeIfAbsent(a.getEncadrant(), k -> new ArrayList<>()).add(a.getEtudiant());
             }
 
+            int maxStudents = 4;
+            for (List<Etudiant> l : map.values()) {
+                if (l.size() > maxStudents) maxStudents = l.size();
+            }
+
             XWPFTable table = doc.createTable();
             setWidth(table, 9500); 
 
             XWPFTableRow row0 = table.getRow(0);
-            while (row0.getTableCells().size() < 10) row0.addNewTableCell();
+            while (row0.getTableCells().size() < 2 + maxStudents * 2) row0.addNewTableCell();
 
             setCellMergeH(row0, 0, 1, "Encadrant",          C_HEADER_DOCX, true, true, 10);
-            setCellMergeH(row0, 2, 9, "Etudiants encadrés", C_HEADER_DOCX, true, true, 10);
+            setCellMergeH(row0, 2, 1 + maxStudents * 2, "Etudiants encadrés", C_HEADER_DOCX, true, true, 10);
 
             XWPFTableRow row1 = table.createRow();
-            while (row1.getTableCells().size() < 10) row1.addNewTableCell();
+            while (row1.getTableCells().size() < 2 + maxStudents * 2) row1.addNewTableCell();
 
             setCellDocx(row1.getCell(0), "Nom",    C_HEADER_DOCX, true, true, 9);
             setCellDocx(row1.getCell(1), "Prénom", C_HEADER_DOCX, true, true, 9);
-            for (int i = 1; i <= 4; i++) {
+            for (int i = 1; i <= maxStudents; i++) {
                 setCellDocx(row1.getCell((i - 1) * 2 + 2), "Etudiant " + i, C_HEADER_DOCX, true, true, 9);
                 setCellDocx(row1.getCell((i - 1) * 2 + 3), "",              C_HEADER_DOCX, true, true, 9);
             }
@@ -519,12 +541,12 @@ public class FrontController extends HttpServlet {
                 List<Etudiant> list = entry.getValue();
 
                 XWPFTableRow row = table.createRow();
-                while (row.getTableCells().size() < 10) row.addNewTableCell();
+                while (row.getTableCells().size() < 2 + maxStudents * 2) row.addNewTableCell();
 
                 setCellDocx(row.getCell(0), prof.getNom(),    C_HEADER_DOCX, true, true,  9);
                 setCellDocx(row.getCell(1), prof.getPrenom(), C_HEADER_DOCX, true, true,  9);
 
-                for (int i = 0; i < 4; i++) {
+                for (int i = 0; i < maxStudents; i++) {
                     String nom    = "";
                     String prenom = "";
                     String color  = C_EMPTY_DOCX;

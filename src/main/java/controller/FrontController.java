@@ -665,6 +665,28 @@ public class FrontController extends HttpServlet {
         return C_EMPTY_DOCX;
     }
 
+    private DeviceRgb getHeureColorPdf(String heure) {
+        if (heure == null) return COLOR_EMPTY;
+        if (heure.contains("9h")) return new DeviceRgb(207, 226, 255); // Blue
+        if (heure.contains("10h")) return new DeviceRgb(217, 234, 211); // Green
+        if (heure.contains("11h")) return new DeviceRgb(255, 243, 205); // Yellow
+        if (heure.contains("14h")) return new DeviceRgb(248, 215, 218); // Red
+        if (heure.contains("15h")) return new DeviceRgb(226, 217, 243); // Purple
+        if (heure.contains("16h")) return new DeviceRgb(255, 229, 204); // Orange
+        return COLOR_EMPTY;
+    }
+
+    private String getHeureColorDocx(String heure) {
+        if (heure == null) return C_EMPTY_DOCX;
+        if (heure.contains("9h")) return "CFE2FF";
+        if (heure.contains("10h")) return "D9EAD3";
+        if (heure.contains("11h")) return "FFF3CD";
+        if (heure.contains("14h")) return "F8D7DA";
+        if (heure.contains("15h")) return "E2D9F3";
+        if (heure.contains("16h")) return "FFE5CC";
+        return C_EMPTY_DOCX;
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     //  PLANNING HANDLERS
     // ══════════════════════════════════════════════════════════════════════════
@@ -672,21 +694,30 @@ public class FrontController extends HttpServlet {
     private void doPlanning(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
         List<Soutenance> soutenances = service.getAllSoutenances();
-        Map<Long, String> colors = service.getProfessorColors();
         req.setAttribute("soutenances", soutenances);
-        req.setAttribute("profColors", colors);
+        
+        // Pass whether affectations exist
+        boolean hasAffectations = service.getTotalEtudiantsAffectes(null) > 0;
+        req.setAttribute("hasAffectations", hasAffectations);
+        
         req.getRequestDispatcher("planning.jsp").forward(req, resp);
     }
 
     private void doLancerPlanning(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
+        
+        // Prevent generation if no affectations
+        if (service.getTotalEtudiantsAffectes(null) == 0) {
+            resp.sendRedirect("planning.do");
+            return;
+        }
+
         List<String> debug = new ArrayList<>();
         service.genererPlanning(debug);
 
         List<Soutenance> soutenances = service.getAllSoutenances();
-        Map<Long, String> colors = service.getProfessorColors();
         req.setAttribute("soutenances", soutenances);
-        req.setAttribute("profColors", colors);
+        req.setAttribute("hasAffectations", true);
         req.setAttribute("planningDone", true);
         req.setAttribute("debug", debug);
         req.getRequestDispatcher("planning.jsp").forward(req, resp);
@@ -750,31 +781,28 @@ public class FrontController extends HttpServlet {
             Professeur m2  = s.getJury().getRapporteur2();
             String filiere  = s.getEtudiant().getFiliere();
 
-            DeviceRgb encColor = hexToRgb(colorMap.getOrDefault(enc.getIdp(), "1A56DB"));
-            DeviceRgb m1Color  = hexToRgb(colorMap.getOrDefault(m1.getIdp(),  "2ECC71"));
-            DeviceRgb m2Color  = hexToRgb(colorMap.getOrDefault(m2.getIdp(),  "E67E22"));
-            DeviceRgb filColor = filiereColorPdf(filiere);
+            DeviceRgb timeColor = getHeureColorPdf(s.getHeure());
 
             // ID
-            table.addCell(planCell(String.valueOf(id++), normal, 8, COLOR_EMPTY, false));
+            table.addCell(planCell(String.valueOf(id++), normal, 8, timeColor, false));
             // Encadrant
-            table.addCell(planCell(enc.getNom() + " " + enc.getPrenom(), bold, 8, encColor, true));
+            table.addCell(planCell(enc.getNom() + " " + enc.getPrenom(), bold, 8, timeColor, false));
             // Jury 1
-            table.addCell(planCell(m1.getNom() + " " + m1.getPrenom(), normal, 8, m1Color, true));
+            table.addCell(planCell(m1.getNom() + " " + m1.getPrenom(), normal, 8, timeColor, false));
             // Jury 2
-            table.addCell(planCell(m2.getNom() + " " + m2.getPrenom(), normal, 8, m2Color, true));
+            table.addCell(planCell(m2.getNom() + " " + m2.getPrenom(), normal, 8, timeColor, false));
             // Date
-            table.addCell(planCell(sdf.format(s.getDate()), normal, 8, filColor, false));
+            table.addCell(planCell(sdf.format(s.getDate()), normal, 8, timeColor, false));
             // Heure
-            table.addCell(planCell(s.getHeure(), normal, 8, filColor, false));
+            table.addCell(planCell(s.getHeure(), bold, 8, timeColor, false));
             // Salle
-            table.addCell(planCell(s.getSalle().getNum_salle(), normal, 8, filColor, false));
+            table.addCell(planCell(s.getSalle().getNum_salle(), normal, 8, timeColor, false));
             // Nom étudiant
-            table.addCell(planCell(s.getEtudiant().getNomE(), normal, 8, COLOR_EMPTY, false));
+            table.addCell(planCell(s.getEtudiant().getNomE(), normal, 8, timeColor, false));
             // Prénom étudiant
-            table.addCell(planCell(s.getEtudiant().getPrenomE(), normal, 8, COLOR_EMPTY, false));
+            table.addCell(planCell(s.getEtudiant().getPrenomE(), normal, 8, timeColor, false));
             // Filière
-            table.addCell(planCell(filiere, normal, 8, filColor, false));
+            table.addCell(planCell(filiere, normal, 8, timeColor, false));
         }
 
         doc.add(table);
@@ -849,26 +877,33 @@ public class FrontController extends HttpServlet {
                 Professeur enc = s.getJury().getPresident();
                 Professeur m1  = s.getJury().getRapporteur1();
                 Professeur m2  = s.getJury().getRapporteur2();
-                String filiere  = s.getEtudiant().getFiliere();
+                String filiere = s.getEtudiant().getFiliere();
 
-                String encHex = colorMap.getOrDefault(enc.getIdp(), C_HEADER_DOCX);
-                String m1Hex  = colorMap.getOrDefault(m1.getIdp(),  "2ECC71");
-                String m2Hex  = colorMap.getOrDefault(m2.getIdp(),  "E67E22");
-                String filHex = filiereColorDocx(filiere);
+                String timeColor = getHeureColorDocx(s.getHeure());
 
                 XWPFTableRow row = table.createRow();
                 while (row.getTableCells().size() < headers.length) row.addNewTableCell();
 
-                setCellDocx(row.getCell(0), String.valueOf(id++),                     C_EMPTY_DOCX, false, false, 8);
-                setCellDocx(row.getCell(1), enc.getNom() + " " + enc.getPrenom(),      encHex,       true,  true,  8);
-                setCellDocx(row.getCell(2), m1.getNom()  + " " + m1.getPrenom(),       m1Hex,        true,  true,  8);
-                setCellDocx(row.getCell(3), m2.getNom()  + " " + m2.getPrenom(),       m2Hex,        true,  true,  8);
-                setCellDocx(row.getCell(4), sdf.format(s.getDate()),                   filHex,       false, false, 8);
-                setCellDocx(row.getCell(5), s.getHeure(),                              filHex,       false, false, 8);
-                setCellDocx(row.getCell(6), s.getSalle().getNum_salle(),               filHex,       false, false, 8);
-                setCellDocx(row.getCell(7), s.getEtudiant().getNomE(),                 C_EMPTY_DOCX, false, false, 8);
-                setCellDocx(row.getCell(8), s.getEtudiant().getPrenomE(),              C_EMPTY_DOCX, false, false, 8);
-                setCellDocx(row.getCell(9), filiere,                                   filHex,       false, false, 8);
+                // ID
+                setCellDocx(row.getCell(0), String.valueOf(id++), timeColor, false, false, 8);
+                // Encadrant
+                setCellDocx(row.getCell(1), enc.getNom() + " " + enc.getPrenom(), timeColor, false, true, 8);
+                // Jury 1
+                setCellDocx(row.getCell(2), m1.getNom() + " " + m1.getPrenom(), timeColor, false, false, 8);
+                // Jury 2
+                setCellDocx(row.getCell(3), m2.getNom() + " " + m2.getPrenom(), timeColor, false, false, 8);
+                // Date
+                setCellDocx(row.getCell(4), sdf.format(s.getDate()), timeColor, false, false, 8);
+                // Heure
+                setCellDocx(row.getCell(5), s.getHeure(), timeColor, false, true, 8);
+                // Salle
+                setCellDocx(row.getCell(6), s.getSalle().getNum_salle(), timeColor, false, false, 8);
+                // Nom
+                setCellDocx(row.getCell(7), s.getEtudiant().getNomE(), timeColor, false, false, 8);
+                // Prénom
+                setCellDocx(row.getCell(8), s.getEtudiant().getPrenomE(), timeColor, false, false, 8);
+                // Filière
+                setCellDocx(row.getCell(9), filiere, timeColor, false, false, 8);
             }
 
             doc.write(resp.getOutputStream());

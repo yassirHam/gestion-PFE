@@ -46,35 +46,51 @@ public class EtudiantDAOImpl implements EtudiantDAO {
 
     @Override
     public void deleteByFiliere(String filiere) {
+        Session session = null;
         Transaction tx = null;
-        try (Session session = sf.openSession()) {
+        try {
+            session = sf.openSession();
             tx = session.beginTransaction();
-            // D'abord supprimer les affectations liées
+            
+            // Delete soutenances for this filiere first
+            session.createMutationQuery("delete from Soutenance s where s.etudiant.filiere = :f")
+                .setParameter("f", filiere).executeUpdate();
+
+            // Delete affectations linked
             session.createMutationQuery(
                 "delete from Affectation a where a.etudiant.filiere = :f")
                 .setParameter("f", filiere).executeUpdate();
-            // Puis supprimer les étudiants
+            
+            // Then delete students
             session.createMutationQuery(
                 "delete from Etudiant where filiere = :f")
                 .setParameter("f", filiere).executeUpdate();
+            
             tx.commit();
         } catch (Exception e) {
-            if (tx != null) tx.rollback();
+            if (tx != null && tx.isActive()) tx.rollback();
             e.printStackTrace();
+        } finally {
+            if (session != null && session.isOpen()) session.close();
         }
     }
 
     @Override
     public void deleteAll() {
+        Session session = null;
         Transaction tx = null;
-        try (Session session = sf.openSession()) {
+        try {
+            session = sf.openSession();
             tx = session.beginTransaction();
+            session.createMutationQuery("delete from Soutenance").executeUpdate();
             session.createMutationQuery("delete from Affectation").executeUpdate();
             session.createMutationQuery("delete from Etudiant").executeUpdate();
             tx.commit();
         } catch (Exception e) {
-            if (tx != null) tx.rollback();
+            if (tx != null && tx.isActive()) tx.rollback();
             e.printStackTrace();
+        } finally {
+            if (session != null && session.isOpen()) session.close();
         }
     }
 }

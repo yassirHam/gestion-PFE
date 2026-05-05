@@ -52,14 +52,17 @@
     <h2 class="mb-4 text-center"><i class="fa-solid fa-list-check me-2"></i>Affectation des encadrants</h2>
 
     <!-- DEBUG -->
-    <c:if test="${not empty debug}">
+    <c:set var="finalDebug" value="${not empty debug ? debug : sessionScope.affectationDebug}" />
+    <c:if test="${not empty finalDebug}">
         <div class="alert alert-info">
             <ul class="mb-0">
-                <c:forEach var="d" items="${debug}">
+                <c:forEach var="d" items="${finalDebug}">
                     <li>${d}</li>
                 </c:forEach>
             </ul>
         </div>
+        <%-- Clear session debug after showing it --%>
+        <c:remove var="affectationDebug" scope="session" />
     </c:if>
 
     <!-- ================= UPLOAD ================= -->
@@ -260,7 +263,7 @@
     </div>
 
     <!-- ================= TELECHARGEMENT APRES AFFECTATION ================= -->
-    <c:if test="${affectationDone == true}">
+    <c:if test="${affectationDone == true || sessionScope.affectationDone == true}">
         <div class="alert alert-success text-center mt-4">
             <h5>Affectation effectuée avec succès</h5>
             <p>
@@ -288,6 +291,8 @@
                 </a>
             </div>
         </div>
+        <%-- Clear session flag after showing it --%>
+        <c:remove var="affectationDone" scope="session" />
     </c:if>
 
     <!-- Historique des affectations -->

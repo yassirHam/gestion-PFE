@@ -379,13 +379,12 @@ public class FrontController extends HttpServlet {
         List<String> filieres = Arrays.asList(selected);
         debug.add("Filières sélectionnées: " + String.join(", ", filieres));
 
-        // Appeler la couche service pour la logique métier
         service.lancerAffectationGlobale(filieres, debug);
-
+        
         // Stocker les filières sélectionnées en session pour filtrer l'export
         req.getSession().setAttribute("lastFilieres", filieres);
-
-        req.setAttribute("affectationDone", true);
+        req.getSession().setAttribute("affectationDone", true);
+        req.getSession().setAttribute("affectationDebug", debug);
         
         // Auto-save history files
         java.io.File historyDir = new java.io.File(getHistoryFolder());
@@ -756,7 +755,7 @@ public class FrontController extends HttpServlet {
         CTTc ctTc = cell.getCTTc();
         return ctTc.isSetTcPr() ? ctTc.getTcPr() : ctTc.addNewTcPr();
     }
-
+    
     private void setCellBg(XWPFTableCell cell, String color) {
         CTTcPr tcPr = getTcPr(cell);
         CTShd shd = tcPr.isSetShd() ? tcPr.getShd() : tcPr.addNewShd();
@@ -925,7 +924,7 @@ public class FrontController extends HttpServlet {
 
     private void doDownloadHistory(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         String filename = req.getParameter("file");
-        if (filename == null || filename.contains("..") || !filename.startsWith("Planning_")) {
+        if (filename == null || filename.contains("..") || (!filename.startsWith("Planning_") && !filename.startsWith("Affectation_"))) {
             resp.sendError(HttpServletResponse.SC_BAD_REQUEST);
             return;
         }

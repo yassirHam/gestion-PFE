@@ -316,6 +316,7 @@ public class FrontController extends HttpServlet {
 
     // Couleurs PDF — valeurs float (0-1) pour iText 7
     private static final DeviceRgb COLOR_HEADER = new DeviceRgb(0.000f, 0.000f, 0.000f); // Black
+    private static final DeviceRgb COLOR_HEADER_AFFECTATION = new DeviceRgb(0.161f, 0.502f, 0.725f); // Blue
     // Dark colors for Planning
     private static final DeviceRgb COLOR_GI     = new DeviceRgb(0.400f, 0.600f, 0.900f); // Darker Blue
     private static final DeviceRgb COLOR_ID     = new DeviceRgb(0.950f, 0.800f, 0.300f); // Darker Yellow
@@ -392,22 +393,22 @@ public class FrontController extends HttpServlet {
 
         Table table = new Table(UnitValue.createPercentArray(cols)).useAllAvailableWidth();
 
-        table.addHeaderCell(headerCell("Encadrant", bold, 2, false));
-        table.addHeaderCell(headerCell("Etudiants encadrés", bold, maxStudents * 2, false));
+        table.addHeaderCell(headerCell("Encadrant", bold, 2, false, COLOR_HEADER_AFFECTATION));
+        table.addHeaderCell(headerCell("Etudiants encadrés", bold, maxStudents * 2, false, COLOR_HEADER_AFFECTATION));
 
-        table.addHeaderCell(subHeaderCell("Nom", bold));
-        table.addHeaderCell(subHeaderCell("Prénom", bold));
+        table.addHeaderCell(subHeaderCell("Nom", bold, COLOR_HEADER_AFFECTATION));
+        table.addHeaderCell(subHeaderCell("Prénom", bold, COLOR_HEADER_AFFECTATION));
         for (int i = 1; i <= maxStudents; i++) {
-            table.addHeaderCell(subHeaderCell("Etudiant " + i + " - Nom", bold));
-            table.addHeaderCell(subHeaderCell("Etudiant " + i + " - Prénom", bold));
+            table.addHeaderCell(subHeaderCell("Etudiant " + i + " - Nom", bold, COLOR_HEADER_AFFECTATION));
+            table.addHeaderCell(subHeaderCell("Etudiant " + i + " - Prénom", bold, COLOR_HEADER_AFFECTATION));
         }
 
         for (Map.Entry<Professeur, List<Etudiant>> entry : map.entrySet()) {
             Professeur prof = entry.getKey();
             List<Etudiant> list = entry.getValue();
 
-            table.addCell(profCell(prof.getNom(),    bold, COLOR_HEADER));
-            table.addCell(profCell(prof.getPrenom(), bold, COLOR_HEADER));
+            table.addCell(profCell(prof.getNom(),    bold, COLOR_HEADER_AFFECTATION));
+            table.addCell(profCell(prof.getPrenom(), bold, COLOR_HEADER_AFFECTATION));
 
             for (int i = 0; i < maxStudents; i++) {
                 if (i < list.size()) {
@@ -434,25 +435,33 @@ public class FrontController extends HttpServlet {
                 .setPadding(3);
     }
 
-    private Cell headerCell(String text, PdfFont font, int colspan, boolean sub) {
+    private Cell headerCell(String text, PdfFont font, int colspan, boolean sub, DeviceRgb bgColor) {
         Cell c = new Cell(1, colspan)
                 .add(new Paragraph(text).setFont(font)
                         .setFontColor(ColorConstants.WHITE).setFontSize(10))
-                .setBackgroundColor(COLOR_HEADER)
+                .setBackgroundColor(bgColor)
                 .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
                 .setVerticalAlignment(com.itextpdf.layout.properties.VerticalAlignment.MIDDLE)
                 .setPadding(4);
         return c;
     }
 
-    private Cell subHeaderCell(String text, PdfFont font) {
+    private Cell headerCell(String text, PdfFont font, int colspan, boolean sub) {
+        return headerCell(text, font, colspan, sub, COLOR_HEADER);
+    }
+
+    private Cell subHeaderCell(String text, PdfFont font, DeviceRgb bgColor) {
         return new Cell()
                 .add(new Paragraph(text).setFont(font)
                         .setFontColor(ColorConstants.WHITE).setFontSize(8))
-                .setBackgroundColor(COLOR_HEADER)
+                .setBackgroundColor(bgColor)
                 .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
                 .setVerticalAlignment(VerticalAlignment.MIDDLE)
                 .setPadding(3);
+    }
+
+    private Cell subHeaderCell(String text, PdfFont font) {
+        return subHeaderCell(text, font, COLOR_HEADER);
     }
 
     private Cell profCell(String text, PdfFont font, DeviceRgb bg) {
@@ -489,6 +498,7 @@ public class FrontController extends HttpServlet {
 
     // Couleurs DOCX — hex RGB sans #
     private static final String C_HEADER_DOCX = "000000"; // Black
+    private static final String C_HEADER_DOCX_AFFECTATION = "2980B9"; // Blue
     // Dark colors for Planning
     private static final String C_GI_DOCX     = "4F8AFF"; // Darker Blue
     private static final String C_ID_DOCX     = "FFC107"; // Darker Yellow
@@ -562,17 +572,17 @@ public class FrontController extends HttpServlet {
             XWPFTableRow row0 = table.getRow(0);
             while (row0.getTableCells().size() < 2 + maxStudents * 2) row0.addNewTableCell();
 
-            setCellMergeH(row0, 0, 1, "Encadrant",          C_HEADER_DOCX, true, true, 10);
-            setCellMergeH(row0, 2, 1 + maxStudents * 2, "Etudiants encadrés", C_HEADER_DOCX, true, true, 10);
+            setCellMergeH(row0, 0, 1, "Encadrant",          C_HEADER_DOCX_AFFECTATION, true, true, 10);
+            setCellMergeH(row0, 2, 1 + maxStudents * 2, "Etudiants encadrés", C_HEADER_DOCX_AFFECTATION, true, true, 10);
 
             XWPFTableRow row1 = table.createRow();
             while (row1.getTableCells().size() < 2 + maxStudents * 2) row1.addNewTableCell();
 
-            setCellDocx(row1.getCell(0), "Nom",    C_HEADER_DOCX, true, true, 9);
-            setCellDocx(row1.getCell(1), "Prénom", C_HEADER_DOCX, true, true, 9);
+            setCellDocx(row1.getCell(0), "Nom",    C_HEADER_DOCX_AFFECTATION, true, true, 9);
+            setCellDocx(row1.getCell(1), "Prénom", C_HEADER_DOCX_AFFECTATION, true, true, 9);
             for (int i = 1; i <= maxStudents; i++) {
-                setCellDocx(row1.getCell((i - 1) * 2 + 2), "Etudiant " + i, C_HEADER_DOCX, true, true, 9);
-                setCellDocx(row1.getCell((i - 1) * 2 + 3), "",              C_HEADER_DOCX, true, true, 9);
+                setCellDocx(row1.getCell((i - 1) * 2 + 2), "Etudiant " + i, C_HEADER_DOCX_AFFECTATION, true, true, 9);
+                setCellDocx(row1.getCell((i - 1) * 2 + 3), "",              C_HEADER_DOCX_AFFECTATION, true, true, 9);
             }
 
             for (Map.Entry<Professeur, List<Etudiant>> entry : map.entrySet()) {
@@ -582,8 +592,8 @@ public class FrontController extends HttpServlet {
                 XWPFTableRow row = table.createRow();
                 while (row.getTableCells().size() < 2 + maxStudents * 2) row.addNewTableCell();
 
-                setCellDocx(row.getCell(0), prof.getNom(),    C_HEADER_DOCX, true, true,  9);
-                setCellDocx(row.getCell(1), prof.getPrenom(), C_HEADER_DOCX, true, true,  9);
+                setCellDocx(row.getCell(0), prof.getNom(),    C_HEADER_DOCX_AFFECTATION, true, true,  9);
+                setCellDocx(row.getCell(1), prof.getPrenom(), C_HEADER_DOCX_AFFECTATION, true, true,  9);
 
                 for (int i = 0; i < maxStudents; i++) {
                     String nom    = "";
@@ -721,6 +731,7 @@ public class FrontController extends HttpServlet {
             case 4: return new DeviceRgb(0.65f, 0.55f, 0.50f); // Brown
             default: return COLOR_EMPTY;
         }
+        
     }
 
     private String getDateColorDocx(java.util.Date d) {

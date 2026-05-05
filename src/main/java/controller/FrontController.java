@@ -316,15 +316,15 @@ public class FrontController extends HttpServlet {
 
     // Couleurs PDF — valeurs float (0-1) pour iText 7
     private static final DeviceRgb COLOR_HEADER = new DeviceRgb(0.000f, 0.000f, 0.000f); // Black
-    private static final DeviceRgb COLOR_HEADER_AFFECTATION = new DeviceRgb(0.161f, 0.502f, 0.725f); // Blue
+    private static final DeviceRgb COLOR_HEADER_AFFECTATION = new DeviceRgb(18, 52, 153); // #123499
     // Dark colors for Planning
     private static final DeviceRgb COLOR_GI     = new DeviceRgb(0.400f, 0.600f, 0.900f); // Darker Blue
     private static final DeviceRgb COLOR_ID     = new DeviceRgb(0.950f, 0.800f, 0.300f); // Darker Yellow
     private static final DeviceRgb COLOR_TDIA   = new DeviceRgb(0.450f, 0.750f, 0.450f); // Darker Green
     // Light colors for Affectation
-    private static final DeviceRgb COLOR_GI_LIGHT     = new DeviceRgb(0.812f, 0.886f, 1.000f); // #CFE2FF
-    private static final DeviceRgb COLOR_ID_LIGHT     = new DeviceRgb(1.000f, 0.953f, 0.804f); // #FFF3CD
-    private static final DeviceRgb COLOR_TDIA_LIGHT   = new DeviceRgb(0.851f, 0.918f, 0.827f); // #D9EAD3
+    private static final DeviceRgb COLOR_GI_LIGHT     = new DeviceRgb(179, 136, 255); // #b388ff
+    private static final DeviceRgb COLOR_ID_LIGHT     = new DeviceRgb(253, 161, 114); // #fda172
+    private static final DeviceRgb COLOR_TDIA_LIGHT   = new DeviceRgb(0, 155, 0);     // #009b00
     private static final DeviceRgb COLOR_EMPTY  = new DeviceRgb(0.950f, 0.950f, 0.950f);
 
     @SuppressWarnings("unchecked")
@@ -498,15 +498,15 @@ public class FrontController extends HttpServlet {
 
     // Couleurs DOCX — hex RGB sans #
     private static final String C_HEADER_DOCX = "000000"; // Black
-    private static final String C_HEADER_DOCX_AFFECTATION = "2980B9"; // Blue
+    private static final String C_HEADER_DOCX_AFFECTATION = "123499"; // #123499
     // Dark colors for Planning
     private static final String C_GI_DOCX     = "4F8AFF"; // Darker Blue
     private static final String C_ID_DOCX     = "FFC107"; // Darker Yellow
     private static final String C_TDIA_DOCX   = "689F38"; // Darker Green
     // Light colors for Affectation
-    private static final String C_GI_DOCX_LIGHT     = "CFE2FF"; // bleu clair
-    private static final String C_ID_DOCX_LIGHT     = "FFF3CD"; // jaune clair
-    private static final String C_TDIA_DOCX_LIGHT   = "D9EAD3"; // vert clair
+    private static final String C_GI_DOCX_LIGHT     = "B388FF"; // #b388ff
+    private static final String C_ID_DOCX_LIGHT     = "FDA172"; // #fda172
+    private static final String C_TDIA_DOCX_LIGHT   = "009B00"; // #009b00
     private static final String C_EMPTY_DOCX  = "F0F0F0";
     private static final String C_WHITE_DOCX  = "FFFFFF";
 

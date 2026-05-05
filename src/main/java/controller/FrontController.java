@@ -190,6 +190,8 @@ public class FrontController extends HttpServlet {
         try {
             List<Professeur> list = ExcelImporter.importProfs(file.getInputStream());
             
+            // Supprimer d'abord les affectations (contrainte FK)
+            affDao.deleteAll();
             profDao.deleteAll();
             profDao.saveAll(list);
             

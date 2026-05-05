@@ -1,15 +1,14 @@
+<%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
 <%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
 
 <!DOCTYPE html>
 <html>
 <head>
     <title>Affectation</title>
-
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-
     <style>
-        .badge-GI { background-color: #0d6efd; color: white; }
-        .badge-ID { background-color: #ffc107; color: black; }
+        .badge-GI   { background-color: #0d6efd; color: white; }
+        .badge-ID   { background-color: #ffc107; color: black; }
         .badge-TDIA { background-color: #198754; color: white; }
 
         .fichier-item {
@@ -17,6 +16,18 @@
             border-radius: 8px;
             padding: 8px 12px;
             background: #f8f9fa;
+        }
+
+        .download-section {
+            background: #f0fff4;
+            border: 2px solid #198754;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
+        }
+
+        .download-section h5 {
+            color: #198754;
         }
     </style>
 </head>
@@ -30,7 +41,7 @@
     <!-- DEBUG -->
     <c:if test="${not empty debug}">
         <div class="alert alert-info">
-            <ul>
+            <ul class="mb-0">
                 <c:forEach var="d" items="${debug}">
                     <li>${d}</li>
                 </c:forEach>
@@ -74,31 +85,24 @@
             </c:when>
 
             <c:otherwise>
-
                 <form id="selectionForm">
 
                     <div class="d-flex flex-wrap gap-2 mb-3">
-
                         <c:forEach var="f" items="${fichiers}">
                             <label class="fichier-item">
-
                                 <input type="checkbox"
                                        name="selectedFilieres"
                                        value="${f.filiere}">
-
                                 <span class="
                                     ${f.filiere == 'GI' ? 'badge-GI' :
                                       f.filiere == 'ID' ? 'badge-ID' :
                                       f.filiere == 'TDIA' ? 'badge-TDIA' : 'bg-secondary text-white'} badge">
                                     ${f.filiere}
                                 </span>
-
                                 <strong>${f.nomFichier}</strong>
                                 <small>(${f.nbEtudiants} etudiants)</small>
-
                             </label>
                         </c:forEach>
-
                     </div>
 
                     <!-- ACTIONS -->
@@ -107,91 +111,53 @@
                         <button type="submit"
                                 formaction="lancerAffectation.do"
                                 formmethod="post"
-                                class="btn btn-danger">
+                                class="btn btn-success"
+                                onclick="return confirm('⚠️ Lancer l\'affectation va écraser les affectations existantes pour les filières sélectionnées. Continuer ?')">
                             Lancer Affectation
                         </button>
 
                         <button type="submit"
                                 formaction="supprimerListes.do"
                                 formmethod="post"
-                                class="btn btn-dark"
-                                onclick="return confirm('Supprimer les listes ?')">
+                                class="btn btn-danger"
+                                onclick="return confirm('Supprimer les listes sélectionnées ?')">
                             Supprimer
                         </button>
 
                     </div>
 
                 </form>
-
             </c:otherwise>
         </c:choose>
 
     </div>
 
-    <!-- ================= RESULTAT ================= -->
+    <!-- ================= TELECHARGEMENT APRES AFFECTATION ================= -->
+    <c:if test="${affectationDone == true}">
+        <div class="download-section shadow-sm">
+            <h5>✅ Affectation effectuée avec succès !</h5>
+            <p class="text-muted mb-4">
+                Les affectations ont été enregistrées. Choisissez le format pour télécharger le rapport.
+            </p>
 
-    <c:if test="${not empty grouped}">
+            <div class="d-flex justify-content-center gap-3">
 
-        <div class="card p-4 shadow-sm">
-
-            <h4>Resultat de l'affectation</h4>
-
-            <c:forEach var="entry" items="${grouped}">
-
-                <div class="mb-4 p-3 border rounded">
-
-                    <!-- ENCadrant -->
-                    <h5 class="text-primary">
-                        ${entry.key.nom} ${entry.key.prenom}
-                    </h5>
-
-                    <!-- TABLE -->
-                    <table class="table table-bordered mt-2">
-
-                        <thead class="table-dark">
-                            <tr>
-                                <th>Filiere</th>
-                                <th>Etudiant</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                        <c:forEach var="a" items="${entry.value}">
-                            <tr class="
-                                ${a.etudiant.filiere == 'GI' ? 'table-primary' :
-                                  a.etudiant.filiere == 'ID' ? 'table-warning' :
-                                  a.etudiant.filiere == 'TDIA' ? 'table-success' : ''}">
-                                <td>${a.etudiant.filiere}</td>
-                                <td>${a.etudiant.nomE} ${a.etudiant.prenomE}</td>
-                            </tr>
-                        </c:forEach>
-                        </tbody>
-
-                    </table>
-
-                </div>
-
-            </c:forEach>
-
-            <!-- EXPORT -->
-            <div class="text-center mt-3">
-
-                <form action="exportPdf.do" method="post" class="d-inline">
-                    <button class="btn btn-outline-danger">
-                        Telecharger PDF
+                <form action="exportPdf.do" method="post" class="d-inline"
+                      onsubmit="return confirm('📄 Vous allez télécharger le rapport PDF des affectations. Continuer ?')">
+                    <button class="btn btn-danger btn-lg">
+                        📄 Télécharger PDF
                     </button>
                 </form>
 
-                <form action="exportDocx.do" method="post" class="d-inline">
-                    <button class="btn btn-outline-primary">
-                        Telecharger Word
+                <form action="exportDocx.do" method="post" class="d-inline"
+                      onsubmit="return confirm('📝 Vous allez télécharger le rapport Word (DOCX) des affectations. Continuer ?')">
+                    <button class="btn btn-primary btn-lg">
+                        📝 Télécharger Word
                     </button>
                 </form>
 
             </div>
-
         </div>
-
     </c:if>
 
 </div>

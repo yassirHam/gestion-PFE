@@ -51,11 +51,13 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 
 @WebServlet("*.do")
 @MultipartConfig(maxFileSize = 10485760) // 10MB
@@ -260,59 +262,63 @@ public class FrontController extends HttpServlet {
             return;
         }
 
-        try (org.hibernate.Session session = util.HibernateUtil.getSessionFactory().openSession()) {
-            org.hibernate.Transaction tx = session.beginTransaction();
-            session.createMutationQuery(
-                "delete from Affectation a where a.etudiant.filiere in (:filieres)")
-                .setParameterList("filieres", filieres)
-                .executeUpdate();
-            tx.commit();
+        // ── Algorithme fair + random ─────────────────────────────────────────
+        // 1. Grouper les étudiants par filière
+        Map<String, List<Etudiant>> byFiliere = new LinkedHashMap<>();
+        for (Etudiant e : etudiants) {
+            byFiliere.computeIfAbsent(e.getFiliere(), k -> new ArrayList<>()).add(e);
         }
 
-        etudiants.sort(Comparator.comparing(Etudiant::getFiliere)
-                                 .thenComparing(Etudiant::getNomE));
+        // 2. Mélanger chaque groupe filière séparément
+        Random rnd = new Random();
+        for (List<Etudiant> group : byFiliere.values()) {
+            Collections.shuffle(group, rnd);
+        }
 
-        Map<Long, Integer> compteur = new LinkedHashMap<>();
-        for (Professeur p : profs) compteur.put(p.getIdp(), 0);
+        // 3. Interleaver : 1 de chaque filière en rotation → liste mixte
+        List<Etudiant> mixed = new ArrayList<>();
+        List<List<Etudiant>> groups = new ArrayList<>(byFiliere.values());
+        boolean added = true;
+        while (added) {
+            added = false;
+            for (List<Etudiant> g : groups) {
+                if (!g.isEmpty()) {
+                    mixed.add(g.remove(0));
+                    added = true;
+                }
+            }
+        }
+
+        // 4. Mélanger les profs et distribuer en round-robin
+        List<Professeur> shuffledProfs = new ArrayList<>(profs);
+        Collections.shuffle(shuffledProfs, rnd);
 
         List<Affectation> result = new ArrayList<>();
-
-        for (Etudiant e : etudiants) {
-            Professeur selected2 = null;
-            int min = Integer.MAX_VALUE;
-            for (Professeur p : profs) {
-                int count = compteur.get(p.getIdp());
-                if (count < min) { min = count; selected2 = p; }
-            }
+        for (int i = 0; i < mixed.size(); i++) {
+            Professeur assigned = shuffledProfs.get(i % shuffledProfs.size());
             Affectation a = new Affectation();
-            a.setEtudiant(e);
-            a.setEncadrant(selected2);
+            a.setEtudiant(mixed.get(i));
+            a.setEncadrant(assigned);
             result.add(a);
-            compteur.put(selected2.getIdp(), compteur.get(selected2.getIdp()) + 1);
         }
+        // ─────────────────────────────────────────────────────────────────────
 
         affDao.saveAll(result);
         debug.add(result.size() + " affectations enregistrées");
 
-        Map<Professeur, List<Affectation>> grouped = new LinkedHashMap<>();
-        List<Affectation> allAffectations = affDao.findAllWithDetails();
-
-        for (Affectation a : allAffectations) {
-            grouped.computeIfAbsent(a.getEncadrant(), k -> new ArrayList<>()).add(a);
-        }
-
-        req.setAttribute("grouped", grouped);
+        // On signale juste que l'affectation est faite — pas de tableau
+        req.setAttribute("affectationDone", true);
         req.setAttribute("fichiers", fichierDao.findAll());
         req.setAttribute("debug", debug);
-        req.setAttribute("totalAffectations", allAffectations.size());
         req.getRequestDispatcher("affectation.jsp").forward(req, resp);
     }
 
-    private static final DeviceRgb COLOR_HEADER = new DeviceRgb(26,  86, 219);  
-    private static final DeviceRgb COLOR_GI     = new DeviceRgb(207, 226, 255); 
-    private static final DeviceRgb COLOR_ID     = new DeviceRgb(255, 243, 205); 
-    private static final DeviceRgb COLOR_TDIA   = new DeviceRgb(217, 234, 211); 
-    private static final DeviceRgb COLOR_EMPTY  = new DeviceRgb(248, 249, 250); 
+    // Couleurs PDF — valeurs float (0-1) pour iText 7
+    private static final DeviceRgb COLOR_HEADER = new DeviceRgb(0.102f, 0.337f, 0.859f); // #1A56DB
+    private static final DeviceRgb COLOR_GI     = new DeviceRgb(0.812f, 0.886f, 1.000f); // #CFE2FF
+    private static final DeviceRgb COLOR_ID     = new DeviceRgb(1.000f, 0.953f, 0.804f); // #FFF3CD
+    private static final DeviceRgb COLOR_TDIA   = new DeviceRgb(0.851f, 0.918f, 0.827f); // #D9EAD3
+    private static final DeviceRgb COLOR_EMPTY  = new DeviceRgb(0.973f, 0.976f, 0.980f); // #F8F9FA
 
     private void doExportPdf(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         List<Affectation> affectations = affDao.findAllWithDetails();
@@ -445,11 +451,12 @@ public class FrontController extends HttpServlet {
         return COLOR_EMPTY;
     }
 
-    private static final String C_HEADER_DOCX = "1A56DB";  
-    private static final String C_GI_DOCX     = "CFE2FF";  
-    private static final String C_ID_DOCX     = "FFF3CD";  
-    private static final String C_TDIA_DOCX   = "D9EAD3";  
-    private static final String C_EMPTY_DOCX  = "F8F9FA";  
+    // Couleurs DOCX — hex RGB sans #
+    private static final String C_HEADER_DOCX = "1A56DB"; // bleu
+    private static final String C_GI_DOCX     = "CFE2FF"; // bleu clair
+    private static final String C_ID_DOCX     = "FFF3CD"; // jaune clair
+    private static final String C_TDIA_DOCX   = "D9EAD3"; // vert clair
+    private static final String C_EMPTY_DOCX  = "F8F9FA"; // gris très clair
     private static final String C_WHITE_DOCX  = "FFFFFF";
 
     private void doExportDocx(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {

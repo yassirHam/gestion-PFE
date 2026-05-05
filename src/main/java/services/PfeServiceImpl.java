@@ -71,6 +71,7 @@ public class PfeServiceImpl implements PfeService {
             org.hibernate.Transaction tx = session.beginTransaction();
             session.createMutationQuery("delete from Soutenance").executeUpdate();
             session.createMutationQuery("delete from Affectation").executeUpdate();
+            session.createMutationQuery("delete from Jury").executeUpdate();
             tx.commit();
         }
         profDao.deleteAll();

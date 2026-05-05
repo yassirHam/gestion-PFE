@@ -80,7 +80,6 @@
                             <div class="d-flex justify-content-between align-items-end mb-2">
                                 <div>
                                     <h6 class="fw-bold mb-1"><i class="fa-solid fa-user-graduate text-primary me-1"></i> Format — Fichier Étudiants</h6>
-                                    <p class="text-muted small mb-0">La 1ère ligne est ignorée (en-tête). Colonnes :</p>
                                 </div>
                                 <a href="templateEtudiants.do" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-download me-1"></i>Modèle</a>
                             </div>
@@ -129,7 +128,7 @@
                             </div>
                             <div class="alert alert-warning py-1 px-2 mt-2 mb-0 small">
                                 <i class="fa-solid fa-triangle-exclamation me-1"></i>
-                                <strong>Attention :</strong> NOM avant PRÉNOM. Une ligne par étudiant. La filière est déduite du nom du fichier (ex: <code>GI.xlsx</code>, <code>ID.xlsx</code>, <code>TDIA.xlsx</code>).
+                                <strong>Attention :</strong> La filière est déduite du nom du fichier (ex: <code>GI.xlsx</code>, <code>ID.xlsx</code>, <code>TDIA.xlsx</code>).
                             </div>
                         </div>
                     </div>
@@ -140,7 +139,6 @@
                             <div class="d-flex justify-content-between align-items-end mb-2">
                                 <div>
                                     <h6 class="fw-bold mb-1"><i class="fa-solid fa-chalkboard-user text-success me-1"></i> Format — Fichier Professeurs</h6>
-                                    <p class="text-muted small mb-0">Les 2 premières lignes sont ignorées.</p>
                                 </div>
                                 <a href="templateProfs.do" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-download me-1"></i>Modèle</a>
                             </div>
@@ -171,10 +169,6 @@
                                         </tr>
                                     </tbody>
                                 </table>
-                            </div>
-                            <div class="alert alert-info py-1 px-2 mt-2 mb-0 small">
-                                <i class="fa-solid fa-circle-info me-1"></i>
-                                Les 2 premières lignes sont sautées automatiquement (en-têtes). Seules ces 3 colonnes sont lues.
                             </div>
                         </div>
                     </div>

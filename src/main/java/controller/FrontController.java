@@ -671,16 +671,6 @@ public class FrontController extends HttpServlet {
         return C_EMPTY_DOCX;
     }
 
-    private DeviceRgb getHeureColorPdf(String heure) {
-        if (heure == null) return COLOR_EMPTY;
-        if (heure.contains("9h")) return new DeviceRgb(207, 226, 255); // Blue
-        if (heure.contains("10h")) return new DeviceRgb(217, 234, 211); // Green
-        if (heure.contains("11h")) return new DeviceRgb(255, 243, 205); // Yellow
-        if (heure.contains("14h")) return new DeviceRgb(248, 215, 218); // Red
-        if (heure.contains("15h")) return new DeviceRgb(226, 217, 243); // Purple
-        if (heure.contains("16h")) return new DeviceRgb(255, 229, 204); // Orange
-        return COLOR_EMPTY;
-    }
 
     private DeviceRgb getDateColorPdf(java.util.Date d) {
         if (d == null) return COLOR_EMPTY;

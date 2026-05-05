@@ -80,20 +80,41 @@
         <c:choose>
             <c:when test="${not empty soutenances}">
 
-                <!-- Légende des créneaux horaires -->
-                <h6 class="text-muted mb-3"><i class="fa-solid fa-palette me-2"></i>Légende des créneaux horaires</h6>
-                <div class="d-flex flex-wrap gap-2 mb-4">
-                    <span class="badge fs-6 fw-normal px-3 py-2" style="background-color:#CFE2FF; color:#333;">09h00</span>
-                    <span class="badge fs-6 fw-normal px-3 py-2" style="background-color:#D9EAD3; color:#333;">10h00</span>
-                    <span class="badge fs-6 fw-normal px-3 py-2" style="background-color:#FFF3CD; color:#333;">11h00</span>
-                    <span class="badge fs-6 fw-normal px-3 py-2" style="background-color:#F8D7DA; color:#333;">14h00</span>
-                    <span class="badge fs-6 fw-normal px-3 py-2" style="background-color:#E2D9F3; color:#333;">15h00</span>
-                    <span class="badge fs-6 fw-normal px-3 py-2" style="background-color:#FFE5CC; color:#333;">16h00</span>
+                <div class="row mb-4">
+                    <!-- Légende des Professeurs -->
+                    <div class="col-md-7 mb-3 mb-md-0">
+                        <h6 class="text-muted mb-3"><i class="fa-solid fa-chalkboard-user me-2"></i>Légende des encadrants / jurys</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                            <c:forEach var="entry" items="${profLegend}">
+                                <span class="badge fw-normal px-2 py-1" style="background-color:#${entry.value}; color:white; font-size:0.8rem;">${entry.key}</span>
+                            </c:forEach>
+                        </div>
+                    </div>
+                    
+                    <!-- Légende des Filières & Créneaux -->
+                    <div class="col-md-5">
+                        <h6 class="text-muted mb-3"><i class="fa-solid fa-graduation-cap me-2"></i>Légende des filières</h6>
+                        <div class="d-flex flex-wrap gap-2 mb-3">
+                            <span class="badge fw-normal px-2 py-1 text-dark" style="background-color:#CFE2FF;">GI</span>
+                            <span class="badge fw-normal px-2 py-1 text-dark" style="background-color:#FFF3CD;">ID</span>
+                            <span class="badge fw-normal px-2 py-1 text-dark" style="background-color:#D9EAD3;">TDIA</span>
+                        </div>
+                        
+                        <h6 class="text-muted mb-2"><i class="fa-solid fa-clock me-2"></i>Couleurs des heures</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                            <span class="badge fw-normal px-2 py-1 text-dark" style="background-color:#CFE2FF;">09h00</span>
+                            <span class="badge fw-normal px-2 py-1 text-dark" style="background-color:#D9EAD3;">10h00</span>
+                            <span class="badge fw-normal px-2 py-1 text-dark" style="background-color:#FFF3CD;">11h00</span>
+                            <span class="badge fw-normal px-2 py-1 text-dark" style="background-color:#F8D7DA;">14h00</span>
+                            <span class="badge fw-normal px-2 py-1 text-dark" style="background-color:#E2D9F3;">15h00</span>
+                            <span class="badge fw-normal px-2 py-1 text-dark" style="background-color:#FFE5CC;">16h00</span>
+                        </div>
+                    </div>
                 </div>
 
-                <p class="text-muted small mb-4">
+                <p class="text-muted small mb-4 border-top pt-3">
                     <i class="fa-solid fa-info-circle me-1"></i>
-                    ${soutenances.size()} soutenances planifiées. Téléchargez le fichier pour voir le détail complet.
+                    <strong>${soutenances.size()}</strong> soutenances planifiées. Téléchargez le fichier PDF ou Word pour voir le détail complet du planning.
                 </p>
 
                 <!-- Boutons télécharger -->

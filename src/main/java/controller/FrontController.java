@@ -315,7 +315,9 @@ public class FrontController extends HttpServlet {
         affDao.saveAll(result);
         debug.add(result.size() + " affectations enregistrées");
 
-        // On signale juste que l'affectation est faite — pas de tableau
+        // Stocker les filières sélectionnées en session pour filtrer l'export
+        req.getSession().setAttribute("lastFilieres", filieres);
+
         req.setAttribute("affectationDone", true);
         req.setAttribute("fichiers", fichierDao.findAll());
         req.setAttribute("debug", debug);
@@ -329,8 +331,23 @@ public class FrontController extends HttpServlet {
     private static final DeviceRgb COLOR_TDIA   = new DeviceRgb(0.851f, 0.918f, 0.827f); // #D9EAD3
     private static final DeviceRgb COLOR_EMPTY  = new DeviceRgb(0.973f, 0.976f, 0.980f); // #F8F9FA
 
+    @SuppressWarnings("unchecked")
     private void doExportPdf(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        List<Affectation> affectations = affDao.findAllWithDetails();
+        List<Affectation> all = affDao.findAllWithDetails();
+
+        // Filtrer par les filières du dernier lancement
+        List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
+        List<Affectation> affectations;
+        if (lastFilieres != null && !lastFilieres.isEmpty()) {
+            affectations = new ArrayList<>();
+            for (Affectation a : all) {
+                if (lastFilieres.contains(a.getEtudiant().getFiliere())) {
+                    affectations.add(a);
+                }
+            }
+        } else {
+            affectations = all;
+        }
 
         resp.setContentType("application/pdf");
         resp.setHeader("Content-Disposition", "attachment; filename=affectations.pdf");
@@ -476,8 +493,23 @@ public class FrontController extends HttpServlet {
     private static final String C_EMPTY_DOCX  = "F8F9FA"; // gris très clair
     private static final String C_WHITE_DOCX  = "FFFFFF";
 
+    @SuppressWarnings("unchecked")
     private void doExportDocx(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        List<Affectation> affectations = affDao.findAllWithDetails();
+        List<Affectation> all = affDao.findAllWithDetails();
+
+        // Filtrer par les filières du dernier lancement
+        List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
+        List<Affectation> affectations;
+        if (lastFilieres != null && !lastFilieres.isEmpty()) {
+            affectations = new ArrayList<>();
+            for (Affectation a : all) {
+                if (lastFilieres.contains(a.getEtudiant().getFiliere())) {
+                    affectations.add(a);
+                }
+            }
+        } else {
+            affectations = all;
+        }
 
         resp.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
         resp.setHeader("Content-Disposition", "attachment; filename=affectations.docx");

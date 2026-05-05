@@ -185,19 +185,13 @@ public class FrontController extends HttpServlet {
             return;
         }
 
-        debug.add("Lecture fichier: " + file.getSubmittedFileName());
-
         try {
             List<Professeur> list = ExcelImporter.importProfs(file.getInputStream());
-            debug.add(list.size() + " professeurs importés");
-
-            for (Professeur p : list) {
-                debug.add("Prof: " + p.getNom() + " " + p.getPrenom() + " | " + p.getDiscipline());
-            }
-
+            
             profDao.deleteAll();
             profDao.saveAll(list);
-            debug.add("Sauvegarde en base terminée");
+            
+            debug.add(list.size() + " professeurs importés avec succès !");
 
         } catch (Exception e) {
             debug.add("Erreur: " + e.getMessage());

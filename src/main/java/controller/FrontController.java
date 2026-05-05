@@ -195,9 +195,25 @@ public class FrontController extends HttpServlet {
 
     private void doAffectation(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         req.setAttribute("fichiers", service.getAllFichiers());
+        
+        // Load History
+        java.io.File historyDir = new java.io.File(getHistoryFolder());
+        List<String> historyFiles = new ArrayList<>();
+        if (historyDir.exists() && historyDir.isDirectory()) {
+            java.io.File[] files = historyDir.listFiles();
+            if (files != null) {
+                for (java.io.File f : files) {
+                    if (f.isFile() && f.getName().startsWith("Affectation_")) {
+                        historyFiles.add(f.getName());
+                    }
+                }
+            }
+        }
+        java.util.Collections.sort(historyFiles, java.util.Collections.reverseOrder());
+        req.setAttribute("historyFiles", historyFiles);
+
         req.getRequestDispatcher("affectation.jsp").forward(req, resp);
     }
-
     private void doTemplateEtudiants(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
             org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Etudiants");
@@ -350,9 +366,28 @@ public class FrontController extends HttpServlet {
         req.getSession().setAttribute("lastFilieres", filieres);
 
         req.setAttribute("affectationDone", true);
+        
+        // Auto-save history files
+        java.io.File historyDir = new java.io.File(getHistoryFolder());
+        if (!historyDir.exists()) historyDir.mkdirs();
+        
+        String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
+        String pdfName = "Affectation_" + timestamp + ".pdf";
+        String docxName = "Affectation_" + timestamp + ".docx";
+        
+        try (java.io.FileOutputStream pdfOut = new java.io.FileOutputStream(new java.io.File(historyDir, pdfName));
+             java.io.FileOutputStream docxOut = new java.io.FileOutputStream(new java.io.File(historyDir, docxName))) {
+            generateAffectationPdfToStream(pdfOut, filieres);
+            generateAffectationDocxToStream(docxOut, filieres);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
         req.setAttribute("fichiers", service.getAllFichiers());
         req.setAttribute("debug", debug);
-        req.getRequestDispatcher("affectation.jsp").forward(req, resp);
+        
+        // Redirect instead of forward to avoid duplicate history on refresh
+        resp.sendRedirect("affectation.do");
     }
 
     // Couleurs PDF — valeurs float (0-1) pour iText 7
@@ -370,10 +405,15 @@ public class FrontController extends HttpServlet {
 
     @SuppressWarnings("unchecked")
     private void doExportPdf(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
+        resp.setContentType("application/pdf");
+        resp.setHeader("Content-Disposition", "attachment; filename=affectations.pdf");
+        generateAffectationPdfToStream(resp.getOutputStream(), lastFilieres);
+    }
+
+    private void generateAffectationPdfToStream(java.io.OutputStream os, List<String> lastFilieres) throws IOException {
         List<Affectation> all = service.getAllAffectationsWithDetails();
 
-        // Filtrer par les filières du dernier lancement
-        List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
         List<Affectation> affectations;
         if (lastFilieres != null && !lastFilieres.isEmpty()) {
             affectations = new ArrayList<>();
@@ -386,10 +426,7 @@ public class FrontController extends HttpServlet {
             affectations = all;
         }
 
-        resp.setContentType("application/pdf");
-        resp.setHeader("Content-Disposition", "attachment; filename=affectations.pdf");
-
-        PdfWriter   writer = new PdfWriter(resp.getOutputStream());
+        PdfWriter   writer = new PdfWriter(os);
         PdfDocument pdf    = new PdfDocument(writer);
         pdf.setDefaultPageSize(PageSize.A4.rotate());
         com.itextpdf.layout.Document doc = new com.itextpdf.layout.Document(pdf);
@@ -553,10 +590,15 @@ public class FrontController extends HttpServlet {
 
     @SuppressWarnings("unchecked")
     private void doExportDocx(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
+        resp.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        resp.setHeader("Content-Disposition", "attachment; filename=affectations.docx");
+        generateAffectationDocxToStream(resp.getOutputStream(), lastFilieres);
+    }
+
+    private void generateAffectationDocxToStream(java.io.OutputStream os, List<String> lastFilieres) throws IOException {
         List<Affectation> all = service.getAllAffectationsWithDetails();
 
-        // Filtrer par les filières du dernier lancement
-        List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
         List<Affectation> affectations;
         if (lastFilieres != null && !lastFilieres.isEmpty()) {
             affectations = new ArrayList<>();
@@ -568,9 +610,6 @@ public class FrontController extends HttpServlet {
         } else {
             affectations = all;
         }
-
-        resp.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-        resp.setHeader("Content-Disposition", "attachment; filename=affectations.docx");
 
         try (XWPFDocument doc = new XWPFDocument()) {
 
@@ -652,8 +691,7 @@ public class FrontController extends HttpServlet {
                     setCellDocx(row.getCell(i * 2 + 3), prenom, color, false, false, 8);
                 }
             }
-
-            doc.write(resp.getOutputStream());
+            doc.write(os);
         }
     }
 

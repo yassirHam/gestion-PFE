@@ -290,6 +290,37 @@
         </div>
     </c:if>
 
+    <!-- Historique des affectations -->
+    <div class="card p-4 mt-4">
+        <h5 class="fw-bold mb-3"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i> Historique des affectations</h5>
+        <c:choose>
+            <c:when test="${not empty historyFiles}">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <tbody>
+                            <c:forEach var="file" items="${historyFiles}">
+                                <tr>
+                                    <td>
+                                        <i class="fa-solid ${file.endsWith('.pdf') ? 'fa-file-pdf text-danger' : 'fa-file-word text-primary'} me-2"></i>
+                                        ${file}
+                                    </td>
+                                    <td class="text-end">
+                                        <a href="downloadHistory.do?file=${file}" class="btn btn-sm btn-outline-secondary">
+                                            <i class="fa-solid fa-download"></i> Télécharger
+                                        </a>
+                                    </td>
+                                </tr>
+                            </c:forEach>
+                        </tbody>
+                    </table>
+                </div>
+            </c:when>
+            <c:otherwise>
+                <p class="text-muted small mb-0">Aucun historique disponible.</p>
+            </c:otherwise>
+        </c:choose>
+    </div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

@@ -762,17 +762,7 @@ public class FrontController extends HttpServlet {
     }
 
     private DeviceRgb getSalleColorPdf(String salle) {
-        if (salle == null) return COLOR_EMPTY;
-        int hash = Math.abs(salle.hashCode());
-        switch (hash % 5) {
-            case 0: return new DeviceRgb(0.60f, 0.45f, 0.75f); // Purple
-            case 1: return new DeviceRgb(0.35f, 0.65f, 0.65f); // Teal
-            case 2: return new DeviceRgb(0.80f, 0.40f, 0.60f); // Pink
-            case 3: return new DeviceRgb(0.85f, 0.85f, 0.40f); // Yellow
-            case 4: return new DeviceRgb(0.65f, 0.55f, 0.50f); // Brown
-            default: return COLOR_EMPTY;
-        } 
-        
+        return COLOR_EMPTY;
     }
 
     private String getDateColorDocx(java.util.Date d) {
@@ -790,16 +780,7 @@ public class FrontController extends HttpServlet {
     }
 
     private String getSalleColorDocx(String salle) {
-        if (salle == null) return C_EMPTY_DOCX;
-        int hash = Math.abs(salle.hashCode());
-        switch (hash % 5) {
-            case 0: return "7B1FA2";
-            case 1: return "00796B";
-            case 2: return "C2185B";
-            case 3: return "FBC02D";
-            case 4: return "5D4037";
-            default: return C_EMPTY_DOCX;
-        }
+        return C_EMPTY_DOCX;
     }
 
     private String getHeureColorDocx(String heure) {

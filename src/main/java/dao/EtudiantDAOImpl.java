@@ -47,50 +47,62 @@ public class EtudiantDAOImpl implements EtudiantDAO {
     @Override
     public void deleteByFiliere(String filiere) {
         Session session = null;
-        Transaction tx = null;
+        org.hibernate.Transaction tx = null;
         try {
             session = sf.openSession();
             tx = session.beginTransaction();
-            
-            // Delete soutenances for this filiere first
-            session.createMutationQuery("delete from Soutenance s where s.etudiant.filiere = :f")
+
+            // Disable FK checks so we don't get constraint violations
+            session.createNativeQuery("SET foreign_key_checks = 0", Void.class).executeUpdate();
+
+            // Delete in order: Soutenance → Affectation → Etudiant
+            session.createNativeQuery(
+                "DELETE s FROM soutenance s " +
+                "JOIN etudiant e ON s.id_etudiant = e.id_etudiant " +
+                "WHERE e.filiere = :f", Void.class)
                 .setParameter("f", filiere).executeUpdate();
 
-            // Delete affectations linked
-            session.createMutationQuery(
-                "delete from Affectation a where a.etudiant.filiere = :f")
+            session.createNativeQuery(
+                "DELETE a FROM affectation a " +
+                "JOIN etudiant e ON a.id_etudiant = e.id_etudiant " +
+                "WHERE e.filiere = :f", Void.class)
                 .setParameter("f", filiere).executeUpdate();
-            
-            // Then delete students
-            session.createMutationQuery(
-                "delete from Etudiant where filiere = :f")
+
+            session.createNativeQuery(
+                "DELETE FROM etudiant WHERE filiere = :f", Void.class)
                 .setParameter("f", filiere).executeUpdate();
-            
+
+            session.createNativeQuery("SET foreign_key_checks = 1", Void.class).executeUpdate();
+
             tx.commit();
         } catch (Exception e) {
-            if (tx != null && tx.isActive()) tx.rollback();
+            try { if (tx != null) tx.rollback(); } catch (Exception ignored) {}
             e.printStackTrace();
         } finally {
-            if (session != null && session.isOpen()) session.close();
+            try { if (session != null) session.close(); } catch (Exception ignored) {}
         }
     }
 
     @Override
     public void deleteAll() {
         Session session = null;
-        Transaction tx = null;
+        org.hibernate.Transaction tx = null;
         try {
             session = sf.openSession();
             tx = session.beginTransaction();
-            session.createMutationQuery("delete from Soutenance").executeUpdate();
-            session.createMutationQuery("delete from Affectation").executeUpdate();
-            session.createMutationQuery("delete from Etudiant").executeUpdate();
+
+            session.createNativeQuery("SET foreign_key_checks = 0", Void.class).executeUpdate();
+            session.createNativeQuery("DELETE FROM soutenance", Void.class).executeUpdate();
+            session.createNativeQuery("DELETE FROM affectation", Void.class).executeUpdate();
+            session.createNativeQuery("DELETE FROM etudiant", Void.class).executeUpdate();
+            session.createNativeQuery("SET foreign_key_checks = 1", Void.class).executeUpdate();
+
             tx.commit();
         } catch (Exception e) {
-            if (tx != null && tx.isActive()) tx.rollback();
+            try { if (tx != null) tx.rollback(); } catch (Exception ignored) {}
             e.printStackTrace();
         } finally {
-            if (session != null && session.isOpen()) session.close();
+            try { if (session != null) session.close(); } catch (Exception ignored) {}
         }
     }
 }

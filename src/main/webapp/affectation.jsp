@@ -64,6 +64,104 @@
 
     <!-- ================= UPLOAD ================= -->
     <div class="card p-3 mb-4">
+
+        <!-- FORMAT PREVIEW SECTION -->
+        <div class="mb-4">
+            <button class="btn btn-outline-secondary btn-sm mb-3" type="button" data-bs-toggle="collapse" data-bs-target="#formatPreview" aria-expanded="false">
+                <i class="fa-solid fa-circle-info me-1"></i> Voir le format Excel attendu
+            </button>
+
+            <div class="collapse" id="formatPreview">
+                <div class="row g-3">
+
+                    <!-- FORMAT ETUDIANTS -->
+                    <div class="col-md-7">
+                        <div class="border rounded p-3 bg-white">
+                            <h6 class="fw-bold mb-1"><i class="fa-solid fa-user-graduate text-primary me-1"></i> Format — Fichier Étudiants</h6>
+                            <p class="text-muted small mb-2">La 1ère ligne est ignorée (en-tête). Les colonnes doivent être dans cet ordre exact :</p>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm text-center mb-0" style="font-size:0.82rem;">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>A — Colonne 1</th>
+                                            <th>B — Colonne 2</th>
+                                            <th>C — Colonne 3</th>
+                                            <th>D — Colonne 4</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="table-light fw-semibold">
+                                            <td><span class="badge bg-secondary">CNE</span></td>
+                                            <td><span class="badge bg-secondary">NOM</span></td>
+                                            <td><span class="badge bg-secondary">PRÉNOM</span></td>
+                                            <td><span class="badge bg-secondary">EMAIL</span></td>
+                                        </tr>
+                                        <tr class="text-muted fst-italic">
+                                            <td>R140025687</td>
+                                            <td>BENALI</td>
+                                            <td>Hamza</td>
+                                            <td>h.benali@etu.ma</td>
+                                        </tr>
+                                        <tr class="text-muted fst-italic">
+                                            <td>R140025688</td>
+                                            <td>EL OUALI</td>
+                                            <td>Sara</td>
+                                            <td>s.elouali@etu.ma</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="alert alert-warning py-1 px-2 mt-2 mb-0 small">
+                                <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                                <strong>Attention :</strong> NOM avant PRÉNOM. Une ligne par étudiant. La filière est déduite du nom du fichier (ex: <code>GI.xlsx</code>, <code>ID.xlsx</code>, <code>TDIA.xlsx</code>).
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- FORMAT PROFESSEURS -->
+                    <div class="col-md-5">
+                        <div class="border rounded p-3 bg-white">
+                            <h6 class="fw-bold mb-1"><i class="fa-solid fa-chalkboard-user text-success me-1"></i> Format — Fichier Professeurs</h6>
+                            <p class="text-muted small mb-2">Les 2 premières lignes sont ignorées. Colonnes :</p>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm text-center mb-0" style="font-size:0.82rem;">
+                                    <thead class="table-dark">
+                                        <tr>
+                                            <th>A — Colonne 1</th>
+                                            <th>B — Colonne 2</th>
+                                            <th>C — Colonne 3</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="table-light fw-semibold">
+                                            <td><span class="badge bg-secondary">NOM</span></td>
+                                            <td><span class="badge bg-secondary">PRÉNOM</span></td>
+                                            <td><span class="badge bg-secondary">SPÉCIALITÉ</span></td>
+                                        </tr>
+                                        <tr class="text-muted fst-italic">
+                                            <td>AMRANI</td>
+                                            <td>Karim</td>
+                                            <td>Informatique</td>
+                                        </tr>
+                                        <tr class="text-muted fst-italic">
+                                            <td>ZOUAK</td>
+                                            <td>Fatima</td>
+                                            <td>Réseaux</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="alert alert-info py-1 px-2 mt-2 mb-0 small">
+                                <i class="fa-solid fa-circle-info me-1"></i>
+                                Les 2 premières lignes sont sautées automatiquement (en-têtes). Seules ces 3 colonnes sont lues.
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
         <div class="row">
 
             <!-- ETUDIANTS -->
@@ -86,6 +184,7 @@
 
         </div>
     </div>
+
 
     <!-- ================= LISTES ================= -->
     <div class="card p-3 mb-4">

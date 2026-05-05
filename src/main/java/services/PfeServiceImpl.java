@@ -34,6 +34,17 @@ public class PfeServiceImpl implements PfeService {
 
     @Override
     public void deleteEtudiantsByFiliere(String filiere) {
+        // Must delete planning data first to avoid FK constraint violations and stale data
+        try (org.hibernate.Session session = util.HibernateUtil.getSessionFactory().openSession()) {
+            org.hibernate.Transaction tx = session.beginTransaction();
+            session.createMutationQuery("delete from Soutenance s where s.etudiant.filiere = :filiere")
+                   .setParameter("filiere", filiere)
+                   .executeUpdate();
+            session.createMutationQuery("delete from Affectation a where a.etudiant.filiere = :filiere")
+                   .setParameter("filiere", filiere)
+                   .executeUpdate();
+            tx.commit();
+        }
         etuDao.deleteByFiliere(filiere);
         fichierDao.deleteByFiliere(filiere);
     }
@@ -55,7 +66,13 @@ public class PfeServiceImpl implements PfeService {
 
     @Override
     public void deleteAffectationsAndProfesseurs() {
-        affDao.deleteAll();
+        // Delete soutenances first to avoid FK violations and stale data
+        try (org.hibernate.Session session = util.HibernateUtil.getSessionFactory().openSession()) {
+            org.hibernate.Transaction tx = session.beginTransaction();
+            session.createMutationQuery("delete from Soutenance").executeUpdate();
+            session.createMutationQuery("delete from Affectation").executeUpdate();
+            tx.commit();
+        }
         profDao.deleteAll();
     }
 
@@ -81,6 +98,12 @@ public class PfeServiceImpl implements PfeService {
 
         try (org.hibernate.Session session = util.HibernateUtil.getSessionFactory().openSession()) {
             org.hibernate.Transaction tx = session.beginTransaction();
+            // First, delete related Soutenances to prevent stale planning data
+            session.createMutationQuery("delete from Soutenance s where s.etudiant.filiere in (:filieres)")
+                   .setParameterList("filieres", filieres)
+                   .executeUpdate();
+                   
+            // Then delete Affectations
             session.createMutationQuery("delete from Affectation a where a.etudiant.filiere in (:filieres)")
                    .setParameterList("filieres", filieres)
                    .executeUpdate();

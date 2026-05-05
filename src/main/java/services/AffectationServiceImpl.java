@@ -28,7 +28,7 @@ public class AffectationServiceImpl implements AffectationService {
 
         if (filieres == null || filieres.isEmpty()) {
             etudiants = etudiantDAO.findAll();
-            debug.add("⚠️ Toutes les filières sélectionnées");
+            debug.add("Toutes les filières sélectionnées");
         } else {
             etudiants = etudiantDAO.findByFilieres(filieres);
             debug.add("Filières sélectionnées: " + filieres);

@@ -63,10 +63,7 @@ import java.util.Random;
 @MultipartConfig(maxFileSize = 10485760) // 10MB
 public class FrontController extends HttpServlet {
 
-    private EtudiantDAO etuDao = new EtudiantDAOImpl();
-    private ProfesseurDAO profDao = new ProfesseurDAOImpl();
-    private AffectationDAO affDao = new AffectationDAOImpl();
-    private FichierListeDAO fichierDao = new FichierListeDAOImpl();
+    private services.PfeService service = new services.PfeServiceImpl();
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -82,6 +79,9 @@ public class FrontController extends HttpServlet {
         String path = req.getServletPath();
 
         switch (path) {
+            case "/dashboard.do":
+                doDashboard(req, resp);
+                break;
             case "/affectation.do":
                 doAffectation(req, resp);
                 break;
@@ -109,8 +109,46 @@ public class FrontController extends HttpServlet {
         }
     }
 
+    private void doDashboard(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        int totalEtudiants = service.getTotalEtudiantsAffectes();
+        int totalProfs = service.getTotalProfesseursEncadrants();
+        
+        Map<String, Integer> etudiantsParProf = service.getEtudiantsParProf();
+        Map<String, Integer> etudiantsParFiliere = service.getEtudiantsParFiliere();
+
+        req.setAttribute("totalEtudiants", totalEtudiants);
+        req.setAttribute("totalProfs", totalProfs);
+        
+        StringBuilder labelsProf = new StringBuilder("[");
+        StringBuilder dataProf = new StringBuilder("[");
+        for (Map.Entry<String, Integer> entry : etudiantsParProf.entrySet()) {
+            labelsProf.append("'").append(entry.getKey().replace("'", "\\'")).append("',");
+            dataProf.append(entry.getValue()).append(",");
+        }
+        if(labelsProf.length() > 1) { labelsProf.setLength(labelsProf.length()-1); dataProf.setLength(dataProf.length()-1); }
+        labelsProf.append("]");
+        dataProf.append("]");
+
+        StringBuilder labelsFil = new StringBuilder("[");
+        StringBuilder dataFil = new StringBuilder("[");
+        for (Map.Entry<String, Integer> entry : etudiantsParFiliere.entrySet()) {
+            labelsFil.append("'").append(entry.getKey().replace("'", "\\'")).append("',");
+            dataFil.append(entry.getValue()).append(",");
+        }
+        if(labelsFil.length() > 1) { labelsFil.setLength(labelsFil.length()-1); dataFil.setLength(dataFil.length()-1); }
+        labelsFil.append("]");
+        dataFil.append("]");
+
+        req.setAttribute("labelsProf", labelsProf.toString());
+        req.setAttribute("dataProf", dataProf.toString());
+        req.setAttribute("labelsFil", labelsFil.toString());
+        req.setAttribute("dataFil", dataFil.toString());
+
+        req.getRequestDispatcher("dashboard.jsp").forward(req, resp);
+    }
+
     private void doAffectation(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        req.setAttribute("fichiers", fichierDao.findAll());
+        req.setAttribute("fichiers", service.getAllFichiers());
         req.getRequestDispatcher("affectation.jsp").forward(req, resp);
     }
 
@@ -134,12 +172,8 @@ public class FrontController extends HttpServlet {
                     continue;
                 }
 
-                etuDao.deleteByFiliere(filiere);
-                etuDao.saveAll(list);
+                service.saveEtudiants(list, filiere, fileName);
                 debug.add( list.size() + " étudiants [" + filiere + "] sauvegardés");
-
-                fichierDao.deleteByFiliere(filiere);
-                fichierDao.save(new FichierListe(fileName, filiere, list.size()));
 
             } catch (Exception e) {
                 debug.add("Erreur: " + fileName + " → " + e.getMessage());
@@ -147,7 +181,7 @@ public class FrontController extends HttpServlet {
             }
         }
 
-        req.setAttribute("fichiers", fichierDao.findAll());
+        req.setAttribute("fichiers", service.getAllFichiers());
         req.setAttribute("debug", debug);
         req.getRequestDispatcher("affectation.jsp").forward(req, resp);
     }
@@ -179,10 +213,8 @@ public class FrontController extends HttpServlet {
         try {
             List<Professeur> list = ExcelImporter.importProfs(file.getInputStream());
             
-            // Supprimer d'abord les affectations (contrainte FK)
-            affDao.deleteAll();
-            profDao.deleteAll();
-            profDao.saveAll(list);
+            service.deleteAffectationsAndProfesseurs();
+            service.saveProfesseurs(list);
             
             debug.add(list.size() + " professeurs importés avec succès !");
 
@@ -193,7 +225,7 @@ public class FrontController extends HttpServlet {
 
         req.setAttribute("debug", debug);
         req.setAttribute("message", "Profs importés ");
-        req.setAttribute("fichiers", fichierDao.findAll());
+        req.setAttribute("fichiers", service.getAllFichiers());
         req.getRequestDispatcher("affectation.jsp").forward(req, resp);
     }
 
@@ -205,13 +237,12 @@ public class FrontController extends HttpServlet {
             debug.add("Aucune filière sélectionnée");
         } else {
             for (String filiere : selected) {
-                etuDao.deleteByFiliere(filiere);
-                fichierDao.deleteByFiliere(filiere);
+                service.deleteEtudiantsByFiliere(filiere);
                 debug.add("Liste [" + filiere + "] supprimée");
             }
         }
 
-        req.setAttribute("fichiers", fichierDao.findAll());
+        req.setAttribute("fichiers", service.getAllFichiers());
         req.setAttribute("debug", debug);
         req.getRequestDispatcher("affectation.jsp").forward(req, resp);
     }
@@ -222,7 +253,7 @@ public class FrontController extends HttpServlet {
 
         if (selected == null || selected.length == 0) {
             debug.add("⚠️ Sélectionnez au moins une filière");
-            req.setAttribute("fichiers", fichierDao.findAll());
+            req.setAttribute("fichiers", service.getAllFichiers());
             req.setAttribute("debug", debug);
             req.getRequestDispatcher("affectation.jsp").forward(req, resp);
             return;
@@ -231,86 +262,14 @@ public class FrontController extends HttpServlet {
         List<String> filieres = Arrays.asList(selected);
         debug.add("Filières sélectionnées: " + String.join(", ", filieres));
 
-        List<Etudiant>    etudiants = etuDao.findByFilieres(filieres);
-        List<Professeur>  profs     = profDao.findAll();
-
-        debug.add("Étudiants trouvés: " + etudiants.size());
-        debug.add("Professeurs disponibles: " + profs.size());
-
-        if (etudiants.isEmpty()) {
-            debug.add("❌ Aucun étudiant pour les filières sélectionnées");
-            req.setAttribute("fichiers", fichierDao.findAll());
-            req.setAttribute("debug", debug);
-            req.getRequestDispatcher("affectation.jsp").forward(req, resp);
-            return;
-        }
-
-        if (profs.isEmpty()) {
-            debug.add("Aucun professeur en base — uploadez d'abord les professeurs");
-            req.setAttribute("fichiers", fichierDao.findAll());
-            req.setAttribute("debug", debug);
-            req.getRequestDispatcher("affectation.jsp").forward(req, resp);
-            return;
-        }
-
-        // ── Algorithme fair + random ─────────────────────────────────────────
-        try (org.hibernate.Session session = util.HibernateUtil.getSessionFactory().openSession()) {
-            org.hibernate.Transaction tx = session.beginTransaction();
-            session.createMutationQuery(
-                "delete from Affectation a where a.etudiant.filiere in (:filieres)")
-                .setParameterList("filieres", filieres)
-                .executeUpdate();
-            tx.commit();
-        }
-
-        // 1. Grouper les étudiants par filière
-        Map<String, List<Etudiant>> byFiliere = new LinkedHashMap<>();
-        for (Etudiant e : etudiants) {
-            byFiliere.computeIfAbsent(e.getFiliere(), k -> new ArrayList<>()).add(e);
-        }
-
-        // 2. Mélanger chaque groupe filière séparément
-        Random rnd = new Random();
-        for (List<Etudiant> group : byFiliere.values()) {
-            Collections.shuffle(group, rnd);
-        }
-
-        // 3. Interleaver : 1 de chaque filière en rotation → liste mixte
-        List<Etudiant> mixed = new ArrayList<>();
-        List<List<Etudiant>> groups = new ArrayList<>(byFiliere.values());
-        boolean added = true;
-        while (added) {
-            added = false;
-            for (List<Etudiant> g : groups) {
-                if (!g.isEmpty()) {
-                    mixed.add(g.remove(0));
-                    added = true;
-                }
-            }
-        }
-
-        // 4. Mélanger les profs et distribuer en round-robin
-        List<Professeur> shuffledProfs = new ArrayList<>(profs);
-        Collections.shuffle(shuffledProfs, rnd);
-
-        List<Affectation> result = new ArrayList<>();
-        for (int i = 0; i < mixed.size(); i++) {
-            Professeur assigned = shuffledProfs.get(i % shuffledProfs.size());
-            Affectation a = new Affectation();
-            a.setEtudiant(mixed.get(i));
-            a.setEncadrant(assigned);
-            result.add(a);
-        }
-        // ─────────────────────────────────────────────────────────────────────
-
-        affDao.saveAll(result);
-        debug.add(result.size() + " affectations enregistrées");
+        // Appeler la couche service pour la logique métier
+        service.lancerAffectationGlobale(filieres, debug);
 
         // Stocker les filières sélectionnées en session pour filtrer l'export
         req.getSession().setAttribute("lastFilieres", filieres);
 
         req.setAttribute("affectationDone", true);
-        req.setAttribute("fichiers", fichierDao.findAll());
+        req.setAttribute("fichiers", service.getAllFichiers());
         req.setAttribute("debug", debug);
         req.getRequestDispatcher("affectation.jsp").forward(req, resp);
     }
@@ -324,7 +283,7 @@ public class FrontController extends HttpServlet {
 
     @SuppressWarnings("unchecked")
     private void doExportPdf(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        List<Affectation> all = affDao.findAllWithDetails();
+        List<Affectation> all = service.getAllAffectationsWithDetails();
 
         // Filtrer par les filières du dernier lancement
         List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
@@ -486,7 +445,7 @@ public class FrontController extends HttpServlet {
 
     @SuppressWarnings("unchecked")
     private void doExportDocx(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        List<Affectation> all = affDao.findAllWithDetails();
+        List<Affectation> all = service.getAllAffectationsWithDetails();
 
         // Filtrer par les filières du dernier lancement
         List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");

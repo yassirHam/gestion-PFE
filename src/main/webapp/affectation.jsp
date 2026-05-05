@@ -6,6 +6,7 @@
 <head>
     <title>Affectation</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
     <style>
         .badge-GI   { background-color: #0d6efd; color: white; }
         .badge-ID   { background-color: #ffc107; color: black; }
@@ -21,9 +22,31 @@
 
 <body class="bg-light">
 
-<div class="container mt-5">
+<!-- Navbar -->
+<nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4 shadow-sm">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand fw-bold" href="index.jsp">
+            <i class="fa-solid fa-graduation-cap me-2"></i>Gestion PFE
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+            <ul class="navbar-nav ms-auto">
+                <li class="nav-item">
+                    <a class="nav-link active" href="affectation.do"><i class="fa-solid fa-users me-1"></i> Affectation</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="dashboard.do"><i class="fa-solid fa-chart-pie me-1"></i> Dashboard</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</nav>
 
-    <h2 class="mb-4 text-center">Affectation des encadrants</h2>
+<div class="container">
+
+    <h2 class="mb-4 text-center"><i class="fa-solid fa-list-check me-2"></i>Affectation des encadrants</h2>
 
     <!-- DEBUG -->
     <c:if test="${not empty debug}">

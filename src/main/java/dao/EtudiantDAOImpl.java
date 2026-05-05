@@ -52,19 +52,20 @@ public class EtudiantDAOImpl implements EtudiantDAO {
             session = sf.openSession();
             tx = session.beginTransaction();
 
-            // Disable FK checks so we don't get constraint violations
+            // Disable FK checks so MySQL doesn't block on constraints
             session.createNativeQuery("SET foreign_key_checks = 0", Void.class).executeUpdate();
 
-            // Delete in order: Soutenance → Affectation → Etudiant
+            // Soutenance.ide = FK vers etudiant
             session.createNativeQuery(
                 "DELETE s FROM soutenance s " +
-                "JOIN etudiant e ON s.id_etudiant = e.id_etudiant " +
+                "JOIN etudiant e ON s.ide = e.ide " +
                 "WHERE e.filiere = :f", Void.class)
                 .setParameter("f", filiere).executeUpdate();
 
+            // Affectation.ide = FK vers etudiant
             session.createNativeQuery(
                 "DELETE a FROM affectation a " +
-                "JOIN etudiant e ON a.id_etudiant = e.id_etudiant " +
+                "JOIN etudiant e ON a.ide = e.ide " +
                 "WHERE e.filiere = :f", Void.class)
                 .setParameter("f", filiere).executeUpdate();
 

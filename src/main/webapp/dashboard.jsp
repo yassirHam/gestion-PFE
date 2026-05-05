@@ -136,8 +136,8 @@
                             <i class="fa-solid fa-calendar-check"></i>
                         </div>
                         <div>
-                            <h6 class="text-muted mb-1">Soutenances Prévues</h6>
-                            <h3 class="mb-0 fw-bold">${totalEtudiants} <small class="text-muted fs-6">(Estimé)</small></h3>
+                            <h6 class="text-muted mb-1">Soutenances Planifiées</h6>
+                            <h3 class="mb-0 fw-bold">${totalSoutenances}</h3>
                         </div>
                     </div>
                 </div>
@@ -163,6 +163,17 @@
             </div>
         </div>
         
+        <!-- Charts Row 2 -->
+        <div class="row mt-4">
+            <!-- Bar Chart: Participations Jury -->
+            <div class="col-lg-12">
+                <div class="chart-container">
+                    <h5 class="mb-4 text-secondary"><i class="fa-solid fa-users me-2"></i> Participations aux Jurys par Professeur</h5>
+                    <canvas id="juryChart" height="80"></canvas>
+                </div>
+            </div>
+        </div>
+        
     </c:if>
 
 </div>
@@ -181,6 +192,9 @@
         
         const labelsFil = ${labelsFil};
         const dataFil = ${dataFil};
+
+        const labelsSoutProf = ${labelsSoutProf};
+        const dataSoutProf = ${dataSoutProf};
 
         // --- Graphique Bar (Profs) ---
         const ctxProf = document.getElementById('profChart').getContext('2d');
@@ -245,6 +259,42 @@
                     }
                 },
                 cutout: '60%'
+            }
+        });
+
+        // --- Graphique Bar (Jurys par Prof) ---
+        const ctxJury = document.getElementById('juryChart').getContext('2d');
+        new Chart(ctxJury, {
+            type: 'bar',
+            data: {
+                labels: labelsSoutProf,
+                datasets: [{
+                    label: 'Nombre de participations aux jurys',
+                    data: dataSoutProf,
+                    backgroundColor: 'rgba(16, 185, 129, 0.7)', // vert
+                    borderColor: 'rgba(16, 185, 129, 1)',
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1 }
+                    },
+                    x: {
+                        ticks: {
+                            autoSkip: false,
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                }
             }
         });
         

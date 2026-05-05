@@ -131,12 +131,15 @@ public class FrontController extends HttpServlet {
 
         int totalEtudiants = service.getTotalEtudiantsAffectes(lastFilieres);
         int totalProfs = service.getTotalProfesseursEncadrants(lastFilieres);
+        int totalSoutenances = service.getTotalSoutenances(lastFilieres);
         
         Map<String, Integer> etudiantsParProf = service.getEtudiantsParProf(lastFilieres);
         Map<String, Integer> etudiantsParFiliere = service.getEtudiantsParFiliere(lastFilieres);
+        Map<String, Integer> soutenancesParProf = service.getSoutenancesParProf(lastFilieres);
 
         req.setAttribute("totalEtudiants", totalEtudiants);
         req.setAttribute("totalProfs", totalProfs);
+        req.setAttribute("totalSoutenances", totalSoutenances);
         
         StringBuilder labelsProf = new StringBuilder("[");
         StringBuilder dataProf = new StringBuilder("[");
@@ -158,10 +161,22 @@ public class FrontController extends HttpServlet {
         labelsFil.append("]");
         dataFil.append("]");
 
+        StringBuilder labelsSoutProf = new StringBuilder("[");
+        StringBuilder dataSoutProf = new StringBuilder("[");
+        for (Map.Entry<String, Integer> entry : soutenancesParProf.entrySet()) {
+            labelsSoutProf.append("'").append(entry.getKey().replace("'", "\\'")).append("',");
+            dataSoutProf.append(entry.getValue()).append(",");
+        }
+        if(labelsSoutProf.length() > 1) { labelsSoutProf.setLength(labelsSoutProf.length()-1); dataSoutProf.setLength(dataSoutProf.length()-1); }
+        labelsSoutProf.append("]");
+        dataSoutProf.append("]");
+
         req.setAttribute("labelsProf", labelsProf.toString());
         req.setAttribute("dataProf", dataProf.toString());
         req.setAttribute("labelsFil", labelsFil.toString());
         req.setAttribute("dataFil", dataFil.toString());
+        req.setAttribute("labelsSoutProf", labelsSoutProf.toString());
+        req.setAttribute("dataSoutProf", dataSoutProf.toString());
 
         req.getRequestDispatcher("dashboard.jsp").forward(req, resp);
     }

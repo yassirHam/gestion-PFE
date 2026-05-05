@@ -185,6 +185,51 @@ public class PfeServiceImpl implements PfeService {
         return getEtudiantsParProf(filieresFiltre).size();
     }
 
+    @Override
+    public Map<String, Integer> getSoutenancesParProf(List<String> filieresFiltre) {
+        List<Soutenance> soutenances = planningService.getAllSoutenances();
+        Map<String, Integer> map = new HashMap<>();
+        
+        for (Soutenance s : soutenances) {
+            if (filieresFiltre != null && !filieresFiltre.isEmpty() && !filieresFiltre.contains(s.getEtudiant().getFiliere())) {
+                continue;
+            }
+            if (s.getJury() != null) {
+                // Add president
+                if (s.getJury().getPresident() != null) {
+                    String nom = s.getJury().getPresident().getNom() + " " + s.getJury().getPresident().getPrenom();
+                    map.put(nom, map.getOrDefault(nom, 0) + 1);
+                }
+                // Add rapporteur 1
+                if (s.getJury().getRapporteur1() != null) {
+                    String nom = s.getJury().getRapporteur1().getNom() + " " + s.getJury().getRapporteur1().getPrenom();
+                    map.put(nom, map.getOrDefault(nom, 0) + 1);
+                }
+                // Add rapporteur 2
+                if (s.getJury().getRapporteur2() != null) {
+                    String nom = s.getJury().getRapporteur2().getNom() + " " + s.getJury().getRapporteur2().getPrenom();
+                    map.put(nom, map.getOrDefault(nom, 0) + 1);
+                }
+            }
+        }
+        return map;
+    }
+
+    @Override
+    public int getTotalSoutenances(List<String> filieresFiltre) {
+        List<Soutenance> soutenances = planningService.getAllSoutenances();
+        if (filieresFiltre == null || filieresFiltre.isEmpty()) {
+            return soutenances.size();
+        }
+        int count = 0;
+        for (Soutenance s : soutenances) {
+            if (filieresFiltre.contains(s.getEtudiant().getFiliere())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     // ── Planning delegation ──────────────────────────────────────────────────
 
     @Override

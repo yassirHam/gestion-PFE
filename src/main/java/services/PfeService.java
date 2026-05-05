@@ -35,6 +35,10 @@ public interface PfeService {
     Map<String, Integer> getEtudiantsParFiliere(List<String> filieresFiltre);
     int getTotalEtudiantsAffectes(List<String> filieresFiltre);
     int getTotalProfesseursEncadrants(List<String> filieresFiltre);
+    
+    // New Dashboard stats for Soutenances
+    Map<String, Integer> getSoutenancesParProf(List<String> filieresFiltre);
+    int getTotalSoutenances(List<String> filieresFiltre);
 
     // Planning operations
     List<Soutenance> genererPlanning(List<String> debugLog);

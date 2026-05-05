@@ -20,7 +20,7 @@
         <!--     Session.java dont le nom "Session" est réservé en SQL. -->
         <!--     → voir entité Session.java corrigée ci-dessous          -->
         <!-- ========================================================= -->
-        <property name="hibernate.hbm2ddl.auto">update</property>
+        <property name="hibernate.hbm2ddl.auto">create</property>
 
         <!-- ===== Logs SQL (mettre false en prod) ===== -->
         <property name="hibernate.show_sql">true</property>

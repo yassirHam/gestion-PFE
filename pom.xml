@@ -28,32 +28,27 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- ===== Servlet API (Tomcat 10.1 = Jakarta EE 10) ===== -->
+    <!-- ===== Servlet API (Tomcat 9 = Java EE 8) ===== -->
     <dependency>
-      <groupId>jakarta.servlet</groupId>
-      <artifactId>jakarta.servlet-api</artifactId>
-      <version>6.0.0</version>
+      <groupId>javax.servlet</groupId>
+      <artifactId>javax.servlet-api</artifactId>
+      <version>4.0.1</version>
       <scope>provided</scope>
     </dependency>
 
-    <!-- ===== JSP API ===== -->
+    <!-- ===== JSP API (Tomcat 9) ===== -->
     <dependency>
-      <groupId>jakarta.servlet.jsp</groupId>
-      <artifactId>jakarta.servlet.jsp-api</artifactId>
-      <version>3.1.0</version>
-      <scope>provided</scope>
+        <groupId>javax.servlet.jsp</groupId>
+        <artifactId>javax.servlet.jsp-api</artifactId>
+        <version>2.3.3</version>
+        <scope>provided</scope>
     </dependency>
 
-    <!-- ===== JSTL pour Tomcat 10+ ===== -->
+    <!-- ===== JSTL pour Tomcat 9 ===== -->
     <dependency>
-      <groupId>org.glassfish.web</groupId>
-      <artifactId>jakarta.servlet.jsp.jstl</artifactId>
-      <version>3.0.1</version>
-    </dependency>
-    <dependency>
-      <groupId>jakarta.servlet.jsp.jstl</groupId>
-      <artifactId>jakarta.servlet.jsp.jstl-api</artifactId>
-      <version>3.0.0</version>
+        <groupId>javax.servlet</groupId>
+        <artifactId>jstl</artifactId>
+        <version>1.2</version>
     </dependency>
 
     <!-- ===== Hibernate 6 ===== -->

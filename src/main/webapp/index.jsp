@@ -18,7 +18,7 @@
     <div class="row justify-content-center">
 
         <div class="col-md-3">
-            <form action="affectation" method="get">
+            <form action="affectation.do" method="get">
                 <button class="btn btn-primary w-100 p-3">
                     Affectation
                 </button>
@@ -26,7 +26,7 @@
         </div>
 
         <div class="col-md-3">
-            <form action="planning" method="get">
+            <form action="planning.do" method="get">
                 <button class="btn btn-success w-100 p-3">
                     Planning
                 </button>
@@ -34,7 +34,7 @@
         </div>
 
         <div class="col-md-3">
-            <form action="pvs" method="get">
+            <form action="pvs.do" method="get">
                 <button class="btn btn-warning w-100 p-3">
                     PVs
                 </button>

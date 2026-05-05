@@ -44,7 +44,7 @@
 
             <!-- ETUDIANTS -->
             <div class="col-md-6">
-                <form action="uploadEtudiants" method="post" enctype="multipart/form-data">
+                <form action="uploadEtudiants.do" method="post" enctype="multipart/form-data">
                     <label>Fichier Etudiants</label>
                     <input type="file" name="files" multiple class="form-control mb-2" required>
                     <button class="btn btn-primary w-100">Upload Etudiants</button>
@@ -53,7 +53,7 @@
 
             <!-- PROFS -->
             <div class="col-md-6">
-                <form action="uploadProfs" method="post" enctype="multipart/form-data">
+                <form action="uploadProfs.do" method="post" enctype="multipart/form-data">
                     <label>Fichier Professeurs</label>
                     <input type="file" name="files" class="form-control mb-2" required>
                     <button class="btn btn-success w-100">Upload Professeurs</button>
@@ -105,14 +105,14 @@
                     <div class="d-flex gap-3">
 
                         <button type="submit"
-                                formaction="lancerAffectation"
+                                formaction="lancerAffectation.do"
                                 formmethod="post"
                                 class="btn btn-danger">
                             Lancer Affectation
                         </button>
 
                         <button type="submit"
-                                formaction="supprimerListes"
+                                formaction="supprimerListes.do"
                                 formmethod="post"
                                 class="btn btn-dark"
                                 onclick="return confirm('Supprimer les listes ?')">
@@ -176,13 +176,13 @@
             <!-- EXPORT -->
             <div class="text-center mt-3">
 
-                <form action="exportPdf" method="post" class="d-inline">
+                <form action="exportPdf.do" method="post" class="d-inline">
                     <button class="btn btn-outline-danger">
                         Telecharger PDF
                     </button>
                 </form>
 
-                <form action="exportDocx" method="post" class="d-inline">
+                <form action="exportDocx.do" method="post" class="d-inline">
                     <button class="btn btn-outline-primary">
                         Telecharger Word
                     </button>

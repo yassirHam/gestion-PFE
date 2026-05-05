@@ -178,7 +178,7 @@
         <div class="col-lg-4">
             <!-- Configuration & Génération -->
             <div class="card p-4 sticky-top" style="top: 20px;">
-                <h5 class="fw-bold mb-3"><i class="fa-solid fa-gear text-secondary me-2"></i> Configuration</h5>
+                <h5 class="fw-bold mb-3"> Configuration</h5>
                 
                 <c:if test="${not hasAffectations}">
                     <div class="alert alert-warning small">

@@ -316,10 +316,10 @@ public class FrontController extends HttpServlet {
 
     // Couleurs PDF — valeurs float (0-1) pour iText 7
     private static final DeviceRgb COLOR_HEADER = new DeviceRgb(0.000f, 0.000f, 0.000f); // Black
-    private static final DeviceRgb COLOR_GI     = new DeviceRgb(0.812f, 0.886f, 1.000f); // #CFE2FF
-    private static final DeviceRgb COLOR_ID     = new DeviceRgb(1.000f, 0.953f, 0.804f); // #FFF3CD
-    private static final DeviceRgb COLOR_TDIA   = new DeviceRgb(0.851f, 0.918f, 0.827f); // #D9EAD3
-    private static final DeviceRgb COLOR_EMPTY  = new DeviceRgb(0.973f, 0.976f, 0.980f); // #F8F9FA
+    private static final DeviceRgb COLOR_GI     = new DeviceRgb(0.400f, 0.600f, 0.900f); // Darker Blue
+    private static final DeviceRgb COLOR_ID     = new DeviceRgb(0.950f, 0.800f, 0.300f); // Darker Yellow
+    private static final DeviceRgb COLOR_TDIA   = new DeviceRgb(0.450f, 0.750f, 0.450f); // Darker Green
+    private static final DeviceRgb COLOR_EMPTY  = new DeviceRgb(0.950f, 0.950f, 0.950f);
 
     @SuppressWarnings("unchecked")
     private void doExportPdf(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -477,10 +477,10 @@ public class FrontController extends HttpServlet {
 
     // Couleurs DOCX — hex RGB sans #
     private static final String C_HEADER_DOCX = "000000"; // Black
-    private static final String C_GI_DOCX     = "CFE2FF"; // bleu clair
-    private static final String C_ID_DOCX     = "FFF3CD"; // jaune clair
-    private static final String C_TDIA_DOCX   = "D9EAD3"; // vert clair
-    private static final String C_EMPTY_DOCX  = "F8F9FA"; // gris très clair
+    private static final String C_GI_DOCX     = "4F8AFF"; // Darker Blue
+    private static final String C_ID_DOCX     = "FFC107"; // Darker Yellow
+    private static final String C_TDIA_DOCX   = "689F38"; // Darker Green
+    private static final String C_EMPTY_DOCX  = "F0F0F0";
     private static final String C_WHITE_DOCX  = "FFFFFF";
 
     @SuppressWarnings("unchecked")
@@ -687,12 +687,11 @@ public class FrontController extends HttpServlet {
         java.util.Calendar cal = java.util.Calendar.getInstance();
         cal.setTime(d);
         int day = cal.get(java.util.Calendar.DAY_OF_MONTH);
-        // Discrete colors for different days
         switch (day % 4) {
-            case 0: return new DeviceRgb(255, 235, 238); // Reddish
-            case 1: return new DeviceRgb(232, 245, 233); // Greenish
-            case 2: return new DeviceRgb(227, 242, 253); // Bluish
-            case 3: return new DeviceRgb(255, 243, 224); // Orangish
+            case 0: return new DeviceRgb(0.85f, 0.40f, 0.40f); // Dark Red
+            case 1: return new DeviceRgb(0.40f, 0.70f, 0.40f); // Dark Green
+            case 2: return new DeviceRgb(0.35f, 0.55f, 0.85f); // Dark Blue
+            case 3: return new DeviceRgb(0.85f, 0.65f, 0.35f); // Dark Orange
             default: return COLOR_EMPTY;
         }
     }
@@ -700,13 +699,12 @@ public class FrontController extends HttpServlet {
     private DeviceRgb getSalleColorPdf(String salle) {
         if (salle == null) return COLOR_EMPTY;
         int hash = Math.abs(salle.hashCode());
-        // Dynamic colors based on room name
         switch (hash % 5) {
-            case 0: return new DeviceRgb(243, 229, 245); // Purple
-            case 1: return new DeviceRgb(224, 242, 241); // Teal
-            case 2: return new DeviceRgb(252, 228, 236); // Pink
-            case 3: return new DeviceRgb(255, 253, 231); // Yellow
-            case 4: return new DeviceRgb(239, 235, 233); // Brown
+            case 0: return new DeviceRgb(0.60f, 0.45f, 0.75f); // Purple
+            case 1: return new DeviceRgb(0.35f, 0.65f, 0.65f); // Teal
+            case 2: return new DeviceRgb(0.80f, 0.40f, 0.60f); // Pink
+            case 3: return new DeviceRgb(0.85f, 0.85f, 0.40f); // Yellow
+            case 4: return new DeviceRgb(0.65f, 0.55f, 0.50f); // Brown
             default: return COLOR_EMPTY;
         }
     }
@@ -717,10 +715,10 @@ public class FrontController extends HttpServlet {
         cal.setTime(d);
         int day = cal.get(java.util.Calendar.DAY_OF_MONTH);
         switch (day % 4) {
-            case 0: return "FFEBEE";
-            case 1: return "E8F5E9";
-            case 2: return "E3F2FD";
-            case 3: return "FFF3E0";
+            case 0: return "D32F2F";
+            case 1: return "388E3C";
+            case 2: return "1976D2";
+            case 3: return "F57C00";
             default: return C_EMPTY_DOCX;
         }
     }
@@ -729,24 +727,35 @@ public class FrontController extends HttpServlet {
         if (salle == null) return C_EMPTY_DOCX;
         int hash = Math.abs(salle.hashCode());
         switch (hash % 5) {
-            case 0: return "F3E5F5";
-            case 1: return "E0F2F1";
-            case 2: return "FCE4EC";
-            case 3: return "FFFDE7";
-            case 4: return "EFEBE9";
+            case 0: return "7B1FA2";
+            case 1: return "00796B";
+            case 2: return "C2185B";
+            case 3: return "FBC02D";
+            case 4: return "5D4037";
             default: return C_EMPTY_DOCX;
         }
     }
 
     private String getHeureColorDocx(String heure) {
         if (heure == null) return C_EMPTY_DOCX;
-        if (heure.contains("9h")) return "CFE2FF";
-        if (heure.contains("10h")) return "D9EAD3";
-        if (heure.contains("11h")) return "FFF3CD";
-        if (heure.contains("14h")) return "F8D7DA";
-        if (heure.contains("15h")) return "E2D9F3";
-        if (heure.contains("16h")) return "FFE5CC";
+        if (heure.contains("9h")) return "4F8AFF";
+        if (heure.contains("10h")) return "689F38";
+        if (heure.contains("11h")) return "FFC107";
+        if (heure.contains("14h")) return "D32F2F";
+        if (heure.contains("15h")) return "7B1FA2";
+        if (heure.contains("16h")) return "E65100";
         return C_EMPTY_DOCX;
+    }
+
+    private DeviceRgb getHeureColorPdf(String heure) {
+        if (heure == null) return COLOR_EMPTY;
+        if (heure.contains("9h")) return new DeviceRgb(0.31f, 0.54f, 1.0f);
+        if (heure.contains("10h")) return new DeviceRgb(0.41f, 0.62f, 0.22f);
+        if (heure.contains("11h")) return new DeviceRgb(1.0f, 0.76f, 0.03f);
+        if (heure.contains("14h")) return new DeviceRgb(0.83f, 0.18f, 0.18f);
+        if (heure.contains("15h")) return new DeviceRgb(0.48f, 0.12f, 0.64f);
+        if (heure.contains("16h")) return new DeviceRgb(0.90f, 0.32f, 0.0f);
+        return COLOR_EMPTY;
     }
 
     // ══════════════════════════════════════════════════════════════════════════

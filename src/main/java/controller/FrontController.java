@@ -119,6 +119,9 @@ public class FrontController extends HttpServlet {
             case "/downloadHistory.do":
                 doDownloadHistory(req, resp);
                 break;
+            case "/clearHistory.do":
+                doClearHistory(req, resp);
+                break;
             case "/planningPdf.do":
                 doPlanningPdf(req, resp);
                 break;
@@ -191,6 +194,23 @@ public class FrontController extends HttpServlet {
         req.setAttribute("dataSoutProf", dataSoutProf.toString());
 
         req.getRequestDispatcher("dashboard.jsp").forward(req, resp);
+    }
+
+    private void doClearHistory(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        java.io.File historyDir = new java.io.File(getHistoryFolder());
+        if (historyDir.exists() && historyDir.isDirectory()) {
+            java.io.File[] files = historyDir.listFiles();
+            if (files != null) {
+                for (java.io.File f : files) {
+                    if (f.isFile() && (f.getName().startsWith("Planning_") || f.getName().startsWith("Affectation_"))) {
+                        f.delete();
+                    }
+                }
+            }
+        }
+        String referer = req.getHeader("referer");
+        if (referer != null) resp.sendRedirect(referer);
+        else resp.sendRedirect("index.jsp");
     }
 
     private void doAffectation(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {

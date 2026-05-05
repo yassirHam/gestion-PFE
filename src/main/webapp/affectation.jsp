@@ -292,7 +292,14 @@
 
     <!-- Historique des affectations -->
     <div class="card p-4 mt-4">
-        <h5 class="fw-bold mb-3"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i> Historique des affectations</h5>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h5 class="fw-bold mb-0"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i> Historique des affectations</h5>
+            <c:if test="${not empty historyFiles}">
+                <a href="clearHistory.do" class="btn btn-sm btn-outline-danger" onclick="return confirm('Supprimer TOUT l\'historique ?')">
+                    <i class="fa-solid fa-trash-can me-1"></i> Vider l'historique
+                </a>
+            </c:if>
+        </div>
         <c:choose>
             <c:when test="${not empty historyFiles}">
                 <div class="table-responsive">

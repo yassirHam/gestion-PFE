@@ -38,6 +38,7 @@ public class ExcelImporter {
                 e.setNomE(row.getCell(1).getStringCellValue());
                 e.setPrenomE(row.getCell(2).getStringCellValue());
                 e.setEmail(getCellValue(row, 3)); // ✅ FIX
+                e.setBinome_cne(getCellValue(row, 4)); // Colonne E (CNE Binôme optionnel)
 
                 e.setFiliere(filiere);
                 e.setSujet_stage("PFE");

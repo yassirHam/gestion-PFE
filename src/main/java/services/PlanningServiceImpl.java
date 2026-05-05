@@ -143,9 +143,35 @@ public class PlanningServiceImpl implements PlanningService {
 
         List<Soutenance> result = new ArrayList<>();
 
-        for (Affectation aff : affectations) {
-            Etudiant etudiant = aff.getEtudiant();
-            Professeur encadrant = aff.getEncadrant();
+        // Grouper les affectations en projets (binômes ou individuels)
+        Map<String, Affectation> affByCne = new HashMap<>();
+        for (Affectation a : affectations) affByCne.put(a.getEtudiant().getCne(), a);
+        
+        List<List<Affectation>> projects = new ArrayList<>();
+        Set<String> processedCne = new HashSet<>();
+        
+        for (Affectation a : affectations) {
+            String cne = a.getEtudiant().getCne();
+            if (processedCne.contains(cne)) continue;
+            
+            List<Affectation> proj = new ArrayList<>();
+            proj.add(a);
+            processedCne.add(cne);
+            
+            if (a.getEtudiant().hasBinome() && affByCne.containsKey(a.getEtudiant().getBinome_cne())) {
+                Affectation partnerAff = affByCne.get(a.getEtudiant().getBinome_cne());
+                if (!processedCne.contains(partnerAff.getEtudiant().getCne())) {
+                    proj.add(partnerAff);
+                    processedCne.add(partnerAff.getEtudiant().getCne());
+                }
+            }
+            projects.add(proj);
+        }
+
+        for (List<Affectation> project : projects) {
+            Affectation mainAff = project.get(0);
+            Etudiant etudiant = mainAff.getEtudiant(); // Lead student for logging
+            Professeur encadrant = mainAff.getEncadrant();
 
             List<Professeur> juryPool = new ArrayList<>(allProfs);
             juryPool.removeIf(p -> p.getIdp().equals(encadrant.getIdp()));
@@ -228,18 +254,29 @@ public class PlanningServiceImpl implements PlanningService {
                 jury.setRapporteur2(bestM2);
                 jury = juryDao.save(jury);
 
-                Soutenance sout = new Soutenance();
-                sout.setDate(validDateObjects.get(bestDayIdx));
-                sout.setHeure(bestSlot + "h");
-                sout.setSalle(bestSalle);
-                sout.setEtudiant(etudiant);
-                sout.setJury(jury);
-                result.add(sout);
+                String etuNoms = "";
+                for (Affectation aff : project) {
+                    Soutenance sout = new Soutenance();
+                    sout.setDate(validDateObjects.get(bestDayIdx));
+                    sout.setHeure(bestSlot + "h");
+                    sout.setSalle(bestSalle);
+                    sout.setEtudiant(aff.getEtudiant());
+                    sout.setJury(jury);
+                    result.add(sout);
+                    
+                    if (!etuNoms.isEmpty()) etuNoms += " & ";
+                    etuNoms += aff.getEtudiant().getNomE();
+                }
 
-                log.add("✔ " + etudiant.getNomE() + " → " + dateStr + " " + bestSlot + "h | Salle: " + bestSalle.getNum_salle()
+                log.add("✔ " + etuNoms + " → " + dateStr + " " + bestSlot + "h | Salle: " + bestSalle.getNum_salle()
                         + " | Enc: " + encadrant.getNom() + " | Jury: " + bestM1.getNom() + ", " + bestM2.getNom());
             } else {
-                log.add("⚠️ Impossible de planifier: " + etudiant.getNomE() + " (aucun créneau valide dans les 4 jours)");
+                String etuNoms = "";
+                for (Affectation aff : project) {
+                    if (!etuNoms.isEmpty()) etuNoms += " & ";
+                    etuNoms += aff.getEtudiant().getNomE();
+                }
+                log.add("⚠️ Impossible de planifier: " + etuNoms + " (aucun créneau valide dans les 4 jours)");
             }
         }
 

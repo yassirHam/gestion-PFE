@@ -77,16 +77,22 @@
                     <!-- FORMAT ETUDIANTS -->
                     <div class="col-md-7">
                         <div class="border rounded p-3 bg-white">
-                            <h6 class="fw-bold mb-1"><i class="fa-solid fa-user-graduate text-primary me-1"></i> Format — Fichier Étudiants</h6>
-                            <p class="text-muted small mb-2">La 1ère ligne est ignorée (en-tête). Les colonnes doivent être dans cet ordre exact :</p>
+                            <div class="d-flex justify-content-between align-items-end mb-2">
+                                <div>
+                                    <h6 class="fw-bold mb-1"><i class="fa-solid fa-user-graduate text-primary me-1"></i> Format — Fichier Étudiants</h6>
+                                    <p class="text-muted small mb-0">La 1ère ligne est ignorée (en-tête). Colonnes :</p>
+                                </div>
+                                <a href="templateEtudiants.do" class="btn btn-sm btn-outline-primary"><i class="fa-solid fa-download me-1"></i>Modèle</a>
+                            </div>
                             <div class="table-responsive">
                                 <table class="table table-bordered table-sm text-center mb-0" style="font-size:0.82rem;">
                                     <thead class="table-dark">
                                         <tr>
-                                            <th>A — Colonne 1</th>
-                                            <th>B — Colonne 2</th>
-                                            <th>C — Colonne 3</th>
-                                            <th>D — Colonne 4</th>
+                                            <th>A — Col 1</th>
+                                            <th>B — Col 2</th>
+                                            <th>C — Col 3</th>
+                                            <th>D — Col 4</th>
+                                            <th>E — Col 5</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -95,18 +101,28 @@
                                             <td><span class="badge bg-secondary">NOM</span></td>
                                             <td><span class="badge bg-secondary">PRÉNOM</span></td>
                                             <td><span class="badge bg-secondary">EMAIL</span></td>
+                                            <td><span class="badge bg-secondary">CNE BINÔME</span></td>
                                         </tr>
                                         <tr class="text-muted fst-italic">
                                             <td>R140025687</td>
                                             <td>BENALI</td>
                                             <td>Hamza</td>
                                             <td>h.benali@etu.ma</td>
+                                            <td>R140025688</td>
                                         </tr>
                                         <tr class="text-muted fst-italic">
                                             <td>R140025688</td>
                                             <td>EL OUALI</td>
                                             <td>Sara</td>
                                             <td>s.elouali@etu.ma</td>
+                                            <td>R140025687</td>
+                                        </tr>
+                                        <tr class="text-muted fst-italic">
+                                            <td>R123456789</td>
+                                            <td>SOLO</td>
+                                            <td>Han</td>
+                                            <td>h.solo@etu.ma</td>
+                                            <td><em>(vide)</em></td>
                                         </tr>
                                     </tbody>
                                 </table>
@@ -121,8 +137,13 @@
                     <!-- FORMAT PROFESSEURS -->
                     <div class="col-md-5">
                         <div class="border rounded p-3 bg-white">
-                            <h6 class="fw-bold mb-1"><i class="fa-solid fa-chalkboard-user text-success me-1"></i> Format — Fichier Professeurs</h6>
-                            <p class="text-muted small mb-2">Les 2 premières lignes sont ignorées. Colonnes :</p>
+                            <div class="d-flex justify-content-between align-items-end mb-2">
+                                <div>
+                                    <h6 class="fw-bold mb-1"><i class="fa-solid fa-chalkboard-user text-success me-1"></i> Format — Fichier Professeurs</h6>
+                                    <p class="text-muted small mb-0">Les 2 premières lignes sont ignorées.</p>
+                                </div>
+                                <a href="templateProfs.do" class="btn btn-sm btn-outline-success"><i class="fa-solid fa-download me-1"></i>Modèle</a>
+                            </div>
                             <div class="table-responsive">
                                 <table class="table table-bordered table-sm text-center mb-0" style="font-size:0.82rem;">
                                     <thead class="table-dark">

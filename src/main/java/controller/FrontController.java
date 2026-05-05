@@ -125,6 +125,12 @@ public class FrontController extends HttpServlet {
             case "/planningDocx.do":
                 doPlanningDocx(req, resp);
                 break;
+            case "/templateEtudiants.do":
+                doTemplateEtudiants(req, resp);
+                break;
+            case "/templateProfs.do":
+                doTemplateProfs(req, resp);
+                break;
             default:
                 req.getRequestDispatcher("index.jsp").forward(req, resp);
                 break;
@@ -190,6 +196,41 @@ public class FrontController extends HttpServlet {
     private void doAffectation(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         req.setAttribute("fichiers", service.getAllFichiers());
         req.getRequestDispatcher("affectation.jsp").forward(req, resp);
+    }
+
+    private void doTemplateEtudiants(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Etudiants");
+            org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
+            header.createCell(0).setCellValue("CNE");
+            header.createCell(1).setCellValue("NOM");
+            header.createCell(2).setCellValue("PRÉNOM");
+            header.createCell(3).setCellValue("EMAIL");
+            header.createCell(4).setCellValue("CNE BINÔME (Optionnel)");
+
+            resp.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            resp.setHeader("Content-Disposition", "attachment; filename=modele_etudiants.xlsx");
+            wb.write(resp.getOutputStream());
+        }
+    }
+
+    private void doTemplateProfs(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Professeurs");
+            
+            // Les deux premières lignes sont ignorées d'après les règles, mais on met des headers sur la ligne 1 pour l'utilisateur
+            org.apache.poi.ss.usermodel.Row row0 = sheet.createRow(0);
+            row0.createCell(0).setCellValue("En-tête décorative 1");
+            
+            org.apache.poi.ss.usermodel.Row row1 = sheet.createRow(1);
+            row1.createCell(0).setCellValue("NOM");
+            row1.createCell(1).setCellValue("PRÉNOM");
+            row1.createCell(2).setCellValue("SPÉCIALITÉ");
+
+            resp.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            resp.setHeader("Content-Disposition", "attachment; filename=modele_professeurs.xlsx");
+            wb.write(resp.getOutputStream());
+        }
     }
 
     private void doUploadEtudiants(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {

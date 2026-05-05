@@ -110,27 +110,46 @@ public class PfeServiceImpl implements PfeService {
             tx.commit();
         }
 
-        // 1. Grouper les étudiants par filière
-        Map<String, List<Etudiant>> byFiliere = new LinkedHashMap<>();
+        // 1. Grouper les étudiants par filière en PROJETS (1 ou 2 étudiants)
+        Map<String, List<List<Etudiant>>> projectsByFiliere = new LinkedHashMap<>();
+        
+        Map<String, Etudiant> etuByCne = new HashMap<>();
+        for (Etudiant e : etudiants) etuByCne.put(e.getCne(), e);
+        
+        Set<String> processedCne = new HashSet<>();
+        
         for (Etudiant e : etudiants) {
-            byFiliere.computeIfAbsent(e.getFiliere(), k -> new ArrayList<>()).add(e);
+            if (processedCne.contains(e.getCne())) continue;
+            
+            List<Etudiant> project = new ArrayList<>();
+            project.add(e);
+            processedCne.add(e.getCne());
+            
+            if (e.hasBinome() && etuByCne.containsKey(e.getBinome_cne())) {
+                Etudiant partner = etuByCne.get(e.getBinome_cne());
+                if (!processedCne.contains(partner.getCne())) {
+                    project.add(partner);
+                    processedCne.add(partner.getCne());
+                }
+            }
+            projectsByFiliere.computeIfAbsent(e.getFiliere(), k -> new ArrayList<>()).add(project);
         }
 
         // 2. Mélanger chaque groupe filière séparément
         Random rnd = new Random();
-        for (List<Etudiant> group : byFiliere.values()) {
+        for (List<List<Etudiant>> group : projectsByFiliere.values()) {
             Collections.shuffle(group, rnd);
         }
 
-        // 3. Interleaver : 1 de chaque filière en rotation → liste mixte
-        List<Etudiant> mixed = new ArrayList<>();
-        List<List<Etudiant>> groups = new ArrayList<>(byFiliere.values());
+        // 3. Interleaver : 1 projet de chaque filière en rotation → liste mixte
+        List<List<Etudiant>> mixedProjects = new ArrayList<>();
+        List<List<List<Etudiant>>> groups = new ArrayList<>(projectsByFiliere.values());
         boolean added = true;
         while (added) {
             added = false;
-            for (List<Etudiant> g : groups) {
+            for (List<List<Etudiant>> g : groups) {
                 if (!g.isEmpty()) {
-                    mixed.add(g.remove(0));
+                    mixedProjects.add(g.remove(0));
                     added = true;
                 }
             }
@@ -141,12 +160,14 @@ public class PfeServiceImpl implements PfeService {
         Collections.shuffle(shuffledProfs, rnd);
 
         List<Affectation> result = new ArrayList<>();
-        for (int i = 0; i < mixed.size(); i++) {
+        for (int i = 0; i < mixedProjects.size(); i++) {
             Professeur assigned = shuffledProfs.get(i % shuffledProfs.size());
-            Affectation a = new Affectation();
-            a.setEtudiant(mixed.get(i));
-            a.setEncadrant(assigned);
-            result.add(a);
+            for (Etudiant e : mixedProjects.get(i)) {
+                Affectation a = new Affectation();
+                a.setEtudiant(e);
+                a.setEncadrant(assigned);
+                result.add(a);
+            }
         }
 
         affDao.saveAll(result);

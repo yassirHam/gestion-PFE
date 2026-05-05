@@ -17,6 +17,7 @@ public class Etudiant {
     private String filiere;
     private String email;
     private String sujet_stage;
+    private String binome_cne; // CNE of binôme partner, null if solo project
 
     @Temporal(TemporalType.DATE)
     private Date date_debut_stage;
@@ -102,7 +103,17 @@ public class Etudiant {
 		this.sujet_stage = sujet_stage;
 	}
 
-	
+	public String getBinome_cne() {
+		return binome_cne;
+	}
+
+	public void setBinome_cne(String binome_cne) {
+		this.binome_cne = binome_cne;
+	}
+
+	public boolean hasBinome() {
+		return binome_cne != null && !binome_cne.trim().isEmpty();
+	}
     
-    
+
 }

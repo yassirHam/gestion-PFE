@@ -148,7 +148,7 @@
                 <div class="d-flex justify-content-between align-items-center mb-3">
                     <h5 class="fw-bold mb-0"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i> Historique des plannings</h5>
                     <c:if test="${not empty historyFiles}">
-                        <a href="clearHistory.do" class="btn btn-sm btn-outline-danger" onclick="return confirm('Supprimer TOUT l\'historique ?')">
+                        <a href="clearHistory.do?type=planning" class="btn btn-sm btn-outline-danger" onclick="return confirm('Supprimer TOUT l\'historique des plannings ?')">
                             <i class="fa-solid fa-trash-can me-1"></i> Vider l'historique
                         </a>
                     </c:if>

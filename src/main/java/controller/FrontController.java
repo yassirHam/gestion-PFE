@@ -197,12 +197,16 @@ public class FrontController extends HttpServlet {
     }
 
     private void doClearHistory(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        String type = req.getParameter("type"); // "planning" or "affectation"
+        String prefix = "Planning_";
+        if ("affectation".equals(type)) prefix = "Affectation_";
+
         java.io.File historyDir = new java.io.File(getHistoryFolder());
         if (historyDir.exists() && historyDir.isDirectory()) {
             java.io.File[] files = historyDir.listFiles();
             if (files != null) {
                 for (java.io.File f : files) {
-                    if (f.isFile() && (f.getName().startsWith("Planning_") || f.getName().startsWith("Affectation_"))) {
+                    if (f.isFile() && f.getName().startsWith(prefix)) {
                         f.delete();
                     }
                 }
@@ -756,6 +760,7 @@ public class FrontController extends HttpServlet {
         return ctTc.isSetTcPr() ? ctTc.getTcPr() : ctTc.addNewTcPr();
     }
     
+    
     private void setCellBg(XWPFTableCell cell, String color) {
         CTTcPr tcPr = getTcPr(cell);
         CTShd shd = tcPr.isSetShd() ? tcPr.getShd() : tcPr.addNewShd();
@@ -763,6 +768,7 @@ public class FrontController extends HttpServlet {
         shd.setVal(STShd.CLEAR);
     }
 
+    
     private void setWidth(XWPFTable table, int widthTwips) {
         CTTbl tbl = table.getCTTbl();
         CTTblPr tblPr = tbl.getTblPr();

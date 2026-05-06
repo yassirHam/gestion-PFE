@@ -404,6 +404,7 @@ public class PlanningServiceImpl implements PlanningService {
             // Find ENGLISH prof (Rapporteur 2) - avec protection d'équité
             Professeur englishProf = null;
             if (needEnglish) {
+                final Professeur fTech = techProf; // Effectively final copy
                 englishProf = available.stream()
                         .filter(p -> profJuryCount.getOrDefault(p.getIdp(), 0) <= minLoad + MAX_LOAD_GAP)
                         .filter(p -> {
@@ -412,7 +413,7 @@ public class PlanningServiceImpl implements PlanningService {
                             return d.contains("anglais") || d.contains("english") ||
                                    s.contains("anglais") || s.contains("english");
                         })
-                        .filter(p -> techProf == null || !p.getIdp().equals(techProf.getIdp()))
+                        .filter(p -> fTech == null || !p.getIdp().equals(fTech.getIdp()))
                         .findFirst().orElse(null);
             }
 
@@ -420,16 +421,18 @@ public class PlanningServiceImpl implements PlanningService {
                 return new Professeur[]{techProf, englishProf};
             }
             if (techProf != null && !needEnglish) {
+                final Professeur fTech2 = techProf; // Effectively final copy
                 // Pick any remaining prof as Rapporteur 2 (le moins chargé grâce au tri)
                 Professeur r2 = available.stream()
-                        .filter(p -> !p.getIdp().equals(techProf.getIdp()))
+                        .filter(p -> !p.getIdp().equals(fTech2.getIdp()))
                         .findFirst().orElse(null);
                 if (r2 != null) return new Professeur[]{techProf, r2};
             }
             if (techProf == null && englishProf != null) {
+                final Professeur fEng = englishProf; // Effectively final copy
                 // Si pas de prof technique exact mais prof d'anglais dispo, on prend l'anglais + le prof tech le moins chargé
                 Professeur r1 = available.stream()
-                        .filter(p -> !p.getIdp().equals(englishProf.getIdp()))
+                        .filter(p -> !p.getIdp().equals(fEng.getIdp()))
                         .findFirst().orElse(null);
                 if (r1 != null) return new Professeur[]{r1, englishProf};
             }

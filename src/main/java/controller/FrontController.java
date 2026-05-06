@@ -948,6 +948,7 @@ public class FrontController extends HttpServlet {
         java.nio.file.Files.copy(file.toPath(), resp.getOutputStream());
     }
 
+    
     private void doAddSalle(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
         String numSalle = req.getParameter("numSalle");

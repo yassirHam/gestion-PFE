@@ -665,6 +665,7 @@ public class FrontController extends HttpServlet {
         generateAffectationDocxToStream(resp.getOutputStream(), lastFilieres);
     }
 
+    
     private void generateAffectationDocxToStream(java.io.OutputStream os, List<String> lastFilieres) throws IOException {
         List<Affectation> all = service.getAllAffectationsWithDetails();
 

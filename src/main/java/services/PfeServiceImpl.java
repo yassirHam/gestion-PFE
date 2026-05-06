@@ -331,26 +331,36 @@ public class PfeServiceImpl implements PfeService {
         // Chercher un étudiant en premier
         for (Affectation a : allAff) {
             Etudiant e = a.getEtudiant();
-            if (e != null && ((e.getNomE() != null && e.getNomE().toLowerCase().contains(query)) ||
-                              (e.getPrenomE() != null && e.getPrenomE().toLowerCase().contains(query)))) {
-                result.put("searchType", "ETUDIANT");
-                result.put("etu", e);
-                result.put("affectation", a);
-                // Trouver la soutenance
-                for (Soutenance s : allSout) {
-                    if (s.getEtudiant() != null && s.getEtudiant().getIde().equals(e.getIde())) {
-                        result.put("soutenance", s);
-                        break;
+            if (e != null) {
+                String nom = e.getNomE() != null ? e.getNomE().toLowerCase() : "";
+                String prenom = e.getPrenomE() != null ? e.getPrenomE().toLowerCase() : "";
+                String fullName1 = nom + " " + prenom;
+                String fullName2 = prenom + " " + nom;
+                
+                if (fullName1.contains(query) || fullName2.contains(query) || nom.contains(query) || prenom.contains(query)) {
+                    result.put("searchType", "ETUDIANT");
+                    result.put("etu", e);
+                    result.put("affectation", a);
+                    // Trouver la soutenance
+                    for (Soutenance s : allSout) {
+                        if (s.getEtudiant() != null && s.getEtudiant().getIde().equals(e.getIde())) {
+                            result.put("soutenance", s);
+                            break;
+                        }
                     }
+                    return result;
                 }
-                return result;
             }
         }
 
         // Sinon chercher un professeur
         for (Professeur p : profDao.findAll()) {
-            if ((p.getNom() != null && p.getNom().toLowerCase().contains(query)) ||
-                (p.getPrenom() != null && p.getPrenom().toLowerCase().contains(query))) {
+            String nom = p.getNom() != null ? p.getNom().toLowerCase() : "";
+            String prenom = p.getPrenom() != null ? p.getPrenom().toLowerCase() : "";
+            String fullName1 = nom + " " + prenom;
+            String fullName2 = prenom + " " + nom;
+            
+            if (fullName1.contains(query) || fullName2.contains(query) || nom.contains(query) || prenom.contains(query)) {
                 
                 result.put("searchType", "PROFESSEUR");
                 result.put("prof", p);

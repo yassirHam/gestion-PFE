@@ -94,7 +94,11 @@ public class NlpServiceImpl implements NlpService {
                 int q2    = response.indexOf('"', q1 + 1);
                 if (q1 >= 0 && q2 > q1) {
                     String lang = response.substring(q1 + 1, q2).trim().toLowerCase();
-                    language = lang.equals("ag") ? "ag" : "fr";
+                    if (lang.contains("ag") || lang.contains("eng") || lang.contains("ang")) {
+                        language = "ag";
+                    } else {
+                        language = "fr";
+                    }
                 }
             }
         } catch (Exception e) {

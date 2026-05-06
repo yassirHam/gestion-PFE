@@ -28,6 +28,9 @@ public class PlanningServiceImpl implements PlanningService {
     private final JuryDAO        juryDao  = new JuryDAOImpl();
     private final SoutenanceDAO  soutDao  = new SoutenanceDAOImpl();
 
+    // ── NLP Service ──────────────────────────────────────────────────────────
+    private final NlpService nlpService = new NlpServiceImpl();
+
     // ── Time slots ───────────────────────────────────────────────────────────
     private static final int[] SLOTS = {9, 10, 11, 14, 15, 16, 17};
 
@@ -173,6 +176,31 @@ public class PlanningServiceImpl implements PlanningService {
             Etudiant etudiant = mainAff.getEtudiant(); // Lead student for logging
             Professeur encadrant = mainAff.getEncadrant();
 
+            // ── NLP Analysis ─────────────────────────────────────────────────
+            String sujet = etudiant.getSujet_stage();
+            List<String> specialitesDispo = new ArrayList<>();
+            for (Professeur p : allProfs) {
+                if (p.getSpecialite() != null && !p.getSpecialite().trim().isEmpty()) {
+                    specialitesDispo.add(p.getSpecialite().trim());
+                }
+            }
+            // Remove duplicates
+            specialitesDispo = new ArrayList<>(new LinkedHashSet<>(specialitesDispo));
+
+            SujetAnalysis nlpResult = null;
+            if (sujet != null && !sujet.trim().isEmpty()) {
+                try {
+                    nlpResult = nlpService.analyzeSujet(sujet, specialitesDispo);
+                    log.add("🤖 NLP [" + etudiant.getNomE() + "] sujet='" + sujet + "' → " + nlpResult);
+                    // Update language field in DB
+                    if (nlpResult.getLanguage() != null) {
+                        etudiant.setLanguage(nlpResult.getLanguage());
+                    }
+                } catch (Exception e) {
+                    log.add("⚠️ NLP error for " + etudiant.getNomE() + " : " + e.getMessage());
+                }
+            }
+
             List<Professeur> juryPool = new ArrayList<>(allProfs);
             juryPool.removeIf(p -> p.getIdp().equals(encadrant.getIdp()));
 
@@ -221,7 +249,7 @@ public class PlanningServiceImpl implements PlanningService {
                     }
                     if (available.size() < 2) continue;
 
-                    Professeur[] pickedJury = pickBestJury(encadrant, available, profJuryCount);
+                    Professeur[] pickedJury = pickBestJury(encadrant, available, profJuryCount, nlpResult);
                     if (pickedJury == null) continue;
 
                     // If we reach here, it's the best option so far
@@ -317,19 +345,55 @@ public class PlanningServiceImpl implements PlanningService {
         return false;
     }
 
-    private Professeur[] pickBestJury(Professeur encadrant, List<Professeur> available, Map<Long, Integer> profJuryCount) {
+    private Professeur[] pickBestJury(Professeur encadrant, List<Professeur> available,
+                                       Map<Long, Integer> profJuryCount, SujetAnalysis nlp) {
         boolean encadrantIsInfo = isInfo(encadrant);
 
-        // Sort by participation count (ascending) to maintain equity + inject small random
-        // factor so same-count profs don't always come in the same order
+        // Sort by jury load (equity) + tiny random tiebreak
         available.sort(Comparator.comparingInt((Professeur p) -> profJuryCount.getOrDefault(p.getIdp(), 0))
                 .thenComparingInt(p -> (int)(Math.random() * 1000)));
 
-        // ── Constraint: at least 2 out of 3 jury members must be Informatique ──
-        // Case A: encadrant is NOT info → both rapporteurs MUST be info (2 + 0 = 2 total)
-        // Case B: encadrant IS info → at least 1 rapporteur must be info (1 + 1 = 2 total)
+        // ── NLP-aware selection ────────────────────────────────────────────
+        if (nlp != null) {
+            String targetSpec  = nlp.getBestSpecialite();    // tech specialite
+            boolean needEnglish = nlp.isEnglish();
 
-        // First pass: strict — prefer the pair that satisfies the rule and both have lowest load
+            // Find best TECH match (Rapporteur 1)
+            Professeur techProf = available.stream()
+                    .filter(p -> p.getSpecialite() != null &&
+                                 p.getSpecialite().toLowerCase().contains(targetSpec != null ? targetSpec.toLowerCase() : ""))
+                    .findFirst().orElse(null);
+
+            // Find ENGLISH prof (Rapporteur 2, only when needEnglish)
+            Professeur englishProf = null;
+            if (needEnglish) {
+                englishProf = available.stream()
+                        .filter(p -> {
+                            String d = p.getDiscipline() != null ? p.getDiscipline().toLowerCase() : "";
+                            String s = p.getSpecialite()  != null ? p.getSpecialite().toLowerCase()  : "";
+                            return d.contains("anglais") || d.contains("english") ||
+                                   s.contains("anglais") || s.contains("english");
+                        })
+                        .filter(p -> techProf == null || !p.getIdp().equals(techProf.getIdp()))
+                        .findFirst().orElse(null);
+            }
+
+            if (techProf != null && englishProf != null) {
+                return new Professeur[]{techProf, englishProf};
+            }
+            if (techProf != null && !needEnglish) {
+                // Pick any remaining prof as Rapporteur 2
+                Professeur r2 = available.stream()
+                        .filter(p -> !p.getIdp().equals(techProf.getIdp()))
+                        .findFirst().orElse(null);
+                if (r2 != null) return new Professeur[]{techProf, r2};
+            }
+            // Partial NLP match — fall through to classic info-constraint selection
+        }
+
+        // ── Classic fallback: at least 2/3 jury members must be Informatique ──
+        // Case A: encadrant is NOT info → both rapporteurs MUST be info
+        // Case B: encadrant IS info → at least 1 rapporteur must be info
         for (int i = 0; i < available.size(); i++) {
             for (int j = i + 1; j < available.size(); j++) {
                 Professeur p1 = available.get(i);

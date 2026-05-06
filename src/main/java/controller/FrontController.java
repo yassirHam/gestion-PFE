@@ -768,7 +768,6 @@ public class FrontController extends HttpServlet {
         shd.setVal(STShd.CLEAR);
     }
 
-    
     private void setWidth(XWPFTable table, int widthTwips) {
         CTTbl tbl = table.getCTTbl();
         CTTblPr tblPr = tbl.getTblPr();

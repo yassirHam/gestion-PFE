@@ -18,6 +18,7 @@ public class Etudiant {
     private String email;
     private String sujet_stage;
     private String binome_cne; // CNE of binôme partner, null if solo project
+    private String language;   // "fr" (français) ou "ag" (anglais) - détecté par NLP
 
     @Temporal(TemporalType.DATE)
     private Date date_debut_stage;
@@ -113,6 +114,14 @@ public class Etudiant {
 
 	public boolean hasBinome() {
 		return binome_cne != null && !binome_cne.trim().isEmpty();
+	}
+
+	public String getLanguage() {
+		return language;
+	}
+
+	public void setLanguage(String language) {
+		this.language = language;
 	}
     
 

@@ -188,6 +188,9 @@ public class PlanningServiceImpl implements PlanningService {
             projects.add(proj);
         }
 
+        // Mélanger les projets pour que le premier étudiant de la base ne soit pas toujours programmé le lundi à 9h !
+        Collections.shuffle(projects);
+
         // ── BATCH NLP Analysis (Pre-processing) ─────────────────────────────────
         List<String> specialitesDispo = new ArrayList<>();
         for (Professeur p : allProfs) {

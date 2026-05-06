@@ -337,7 +337,7 @@
                                 <tr>
                                     <td>
                                         <i class="fa-solid fa-clock-rotate-left text-muted me-2"></i>
-                                        <strong>Affectation du ${ts.replace('_', ' à ').replace('-', ':')}</strong>
+                                        <strong>Affectation du ${ts.substring(0,10).replace('-', '/')} à ${ts.substring(11).replace('-', ':')}</strong>
                                     </td>
                                     <td class="text-end">
                                         <a href="restoreAffectation.do?timestamp=${ts}" class="btn btn-sm btn-outline-success me-2" onclick="return confirm('Attention : Restaurer cette affectation va écraser l\'affectation actuelle. Continuer ?')">

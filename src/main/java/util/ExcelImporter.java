@@ -41,7 +41,12 @@ public class ExcelImporter {
                 e.setBinome_cne(getCellValue(row, 4)); // Colonne E (CNE Binôme optionnel)
 
                 e.setFiliere(filiere);
-                e.setSujet_stage("PFE");
+                
+                String sujet = getCellValue(row, 5); // Colonne F (Sujet de stage)
+                if (sujet == null || sujet.trim().isEmpty()) {
+                    sujet = "Projet de fin d'études";
+                }
+                e.setSujet_stage(sujet);
 
                 if (e.getNomE() == null || e.getNomE().isEmpty()) continue;
 

@@ -901,6 +901,7 @@ public class FrontController extends HttpServlet {
         if (heure.contains("14h")) return "E91E63";  // Pink
         if (heure.contains("15h")) return "607D8B";  // Blue Grey
         if (heure.contains("16h")) return "3F51B5";  // Indigo
+        if (heure.contains("17h")) return "388E3C";  // Dark Green
         return C_EMPTY_DOCX;
     }
 
@@ -912,6 +913,7 @@ public class FrontController extends HttpServlet {
         if (heure.contains("14h")) return new DeviceRgb(233, 30, 99);  // Pink
         if (heure.contains("15h")) return new DeviceRgb(96, 125, 139); // Blue Grey
         if (heure.contains("16h")) return new DeviceRgb(63, 81, 181);  // Indigo
+        if (heure.contains("17h")) return new DeviceRgb(56, 142, 60);  // Dark Green
         return COLOR_EMPTY;
     }
 

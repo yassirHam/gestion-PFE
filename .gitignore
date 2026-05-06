@@ -5,3 +5,6 @@
 .project
 .classpath
 /bin/
+
+# Fichier de config privé (clés API, mots de passe)
+src/main/resources/config.properties

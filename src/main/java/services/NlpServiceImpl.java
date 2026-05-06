@@ -20,21 +20,37 @@ public class NlpServiceImpl implements NlpService {
 
     private static final Logger LOG = Logger.getLogger(NlpServiceImpl.class.getName());
 
-    // ─── NVIDIA NIM config ────────────────────────────────────────────────────
-    private static final String NVIDIA_API_KEY  = "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";
-    private static final String NVIDIA_BASE_URL = "https://integrate.api.nvidia.com/v1";
-    private static final String MODEL_NAME      = "meta/llama-3.3-70b-instruct";
-
     private final ChatLanguageModel model;
 
     public NlpServiceImpl() {
+        java.util.Properties cfg = loadConfig();
+        String apiKey  = cfg.getProperty("nvidia.api.key",  "MISSING_API_KEY");
+        String baseUrl = cfg.getProperty("nvidia.base.url", "https://integrate.api.nvidia.com/v1");
+        String model_  = cfg.getProperty("nvidia.model",   "meta/llama-3.3-70b-instruct");
+
         this.model = OpenAiChatModel.builder()
-                .apiKey(NVIDIA_API_KEY)
-                .baseUrl(NVIDIA_BASE_URL)
-                .modelName(MODEL_NAME)
+                .apiKey(apiKey)
+                .baseUrl(baseUrl)
+                .modelName(model_)
                 .temperature(0.2)
                 .maxTokens(256)
                 .build();
+    }
+
+    /** Charge config.properties depuis le classpath */
+    private static java.util.Properties loadConfig() {
+        java.util.Properties props = new java.util.Properties();
+        try (java.io.InputStream is = NlpServiceImpl.class
+                .getClassLoader().getResourceAsStream("config.properties")) {
+            if (is != null) {
+                props.load(is);
+            } else {
+                LOG.severe("config.properties introuvable dans le classpath ! Copiez config.properties.example.");
+            }
+        } catch (java.io.IOException e) {
+            LOG.log(java.util.logging.Level.SEVERE, "Erreur lecture config.properties", e);
+        }
+        return props;
     }
 
     @Override

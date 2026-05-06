@@ -665,7 +665,6 @@ public class FrontController extends HttpServlet {
         generateAffectationDocxToStream(resp.getOutputStream(), lastFilieres);
     }
 
-    
     private void generateAffectationDocxToStream(java.io.OutputStream os, List<String> lastFilieres) throws IOException {
         List<Affectation> all = service.getAllAffectationsWithDetails();
 
@@ -896,23 +895,23 @@ public class FrontController extends HttpServlet {
 
     private String getHeureColorDocx(String heure) {
         if (heure == null) return C_EMPTY_DOCX;
-        if (heure.contains("9h")) return "4F8AFF";
-        if (heure.contains("10h")) return "689F38";
-        if (heure.contains("11h")) return "FFC107";
-        if (heure.contains("14h")) return "D32F2F";
-        if (heure.contains("15h")) return "7B1FA2";
-        if (heure.contains("16h")) return "E65100";
+        if (heure.contains("9h")) return "00BCD4";   // Cyan
+        if (heure.contains("10h")) return "FF9800";  // Amber
+        if (heure.contains("11h")) return "795548";  // Brown
+        if (heure.contains("14h")) return "E91E63";  // Pink
+        if (heure.contains("15h")) return "607D8B";  // Blue Grey
+        if (heure.contains("16h")) return "3F51B5";  // Indigo
         return C_EMPTY_DOCX;
     }
 
     private DeviceRgb getHeureColorPdf(String heure) {
         if (heure == null) return COLOR_EMPTY;
-        if (heure.contains("9h")) return new DeviceRgb(0.31f, 0.54f, 1.0f);
-        if (heure.contains("10h")) return new DeviceRgb(0.41f, 0.62f, 0.22f);
-        if (heure.contains("11h")) return new DeviceRgb(1.0f, 0.76f, 0.03f);
-        if (heure.contains("14h")) return new DeviceRgb(0.83f, 0.18f, 0.18f);
-        if (heure.contains("15h")) return new DeviceRgb(0.48f, 0.12f, 0.64f);
-        if (heure.contains("16h")) return new DeviceRgb(0.90f, 0.32f, 0.0f);
+        if (heure.contains("9h")) return new DeviceRgb(0, 188, 212);   // Cyan
+        if (heure.contains("10h")) return new DeviceRgb(255, 152, 0);  // Amber
+        if (heure.contains("11h")) return new DeviceRgb(121, 85, 72);  // Brown
+        if (heure.contains("14h")) return new DeviceRgb(233, 30, 99);  // Pink
+        if (heure.contains("15h")) return new DeviceRgb(96, 125, 139); // Blue Grey
+        if (heure.contains("16h")) return new DeviceRgb(63, 81, 181);  // Indigo
         return COLOR_EMPTY;
     }
 

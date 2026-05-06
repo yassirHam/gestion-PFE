@@ -382,9 +382,10 @@ public class PlanningServiceImpl implements PlanningService {
                                        Map<Long, Integer> profJuryCount, SujetAnalysis nlp) {
         boolean encadrantIsInfo = isInfo(encadrant);
 
-        // Sort by jury load (equity) + tiny random tiebreak
-        available.sort(Comparator.comparingInt((Professeur p) -> profJuryCount.getOrDefault(p.getIdp(), 0))
-                .thenComparingInt(p -> (int)(Math.random() * 1000)));
+        // Mélanger d'abord pour avoir un tiebreak aléatoire parfait (le sort qui suit est 'stable')
+        Collections.shuffle(available);
+        // Sort by jury load (equity)
+        available.sort(Comparator.comparingInt((Professeur p) -> profJuryCount.getOrDefault(p.getIdp(), 0)));
 
         int minLoad = available.isEmpty() ? 0 : profJuryCount.getOrDefault(available.get(0).getIdp(), 0);
         int MAX_LOAD_GAP = 2; // Un prof ne peut pas avoir 3 jurys de plus que le prof le moins chargé (écart max = 2)

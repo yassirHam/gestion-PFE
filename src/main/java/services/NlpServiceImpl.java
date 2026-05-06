@@ -4,6 +4,8 @@ import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Logger;
 import java.util.logging.Level;
 
@@ -20,6 +22,9 @@ public class NlpServiceImpl implements NlpService {
 
     private static final Logger LOG = Logger.getLogger(NlpServiceImpl.class.getName());
 
+    // ── Cache statique pour éviter de réinterroger l'API pour les mêmes sujets ──
+    private static final Map<String, SujetAnalysis> CACHE = new ConcurrentHashMap<>();
+
     private final ChatLanguageModel model;
 
     public NlpServiceImpl() {
@@ -34,6 +39,7 @@ public class NlpServiceImpl implements NlpService {
                 .modelName(model_)
                 .temperature(0.2)
                 .maxTokens(256)
+                .maxRetries(0) // On désactive les retries pour éviter que ça boucle/bloque pendant 2 minutes sur une erreur 429
                 .build();
     }
 
@@ -59,6 +65,13 @@ public class NlpServiceImpl implements NlpService {
             return new SujetAnalysis(specialitesDispos.isEmpty() ? "Informatique" : specialitesDispos.get(0), "fr");
         }
 
+        // Vérification dans le cache
+        String cacheKey = sujet.trim().toLowerCase();
+        if (CACHE.containsKey(cacheKey)) {
+            LOG.info("🚀 Sujet trouvé dans le cache NLP : " + sujet);
+            return CACHE.get(cacheKey);
+        }
+
         String specialitesStr = String.join(", ", specialitesDispos);
 
         String prompt = "Tu es un assistant qui classe des sujets de PFE (Projet de Fin d'Études).\n" +
@@ -72,10 +85,17 @@ public class NlpServiceImpl implements NlpService {
                 "Réponds uniquement avec le JSON.";
 
         try {
+            // Petite pause pour éviter de marteler l'API (Rate Limit 429)
+            Thread.sleep(300);
+            
             String response = model.generate(prompt);
-            return parseResponse(response, specialitesDispos);
+            SujetAnalysis result = parseResponse(response, specialitesDispos);
+            
+            // On sauvegarde dans le cache
+            CACHE.put(cacheKey, result);
+            return result;
         } catch (Exception e) {
-            LOG.log(Level.WARNING, "NLP API call failed for sujet: " + sujet, e);
+            LOG.log(Level.WARNING, "NLP API call failed for sujet: " + sujet + " - Reason: " + e.getMessage());
             // Graceful fallback: return first available specialite, default language fr
             return new SujetAnalysis(specialitesDispos.isEmpty() ? "Informatique" : specialitesDispos.get(0), "fr");
         }

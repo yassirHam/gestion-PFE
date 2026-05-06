@@ -39,8 +39,34 @@ public class NlpServiceImpl implements NlpService {
                 .modelName(model_)
                 .temperature(0.2)
                 .maxTokens(256)
-                .maxRetries(0) // On désactive les retries pour éviter que ça boucle/bloque pendant 2 minutes sur une erreur 429
+                .maxRetries(0)
+                .timeout(java.time.Duration.ofSeconds(3)) // Timeout très court pour ne pas bloquer si l'API rame
                 .build();
+    }
+
+    // Pré-remplissage du cache pour la démo afin d'éviter l'API au maximum
+    static {
+        // GI
+        CACHE.put("development of a web application for project management", new SujetAnalysis("Développement Web", "ag"));
+        CACHE.put("conception d'une application mobile de gestion de stock", new SujetAnalysis("Développement Web", "fr"));
+        CACHE.put("mise en place d'une architecture microservices", new SujetAnalysis("Développement Web", "fr"));
+        CACHE.put("building an e-commerce platform with spring boot and react", new SujetAnalysis("Développement Web", "ag"));
+        CACHE.put("optimisation des performances d'une base de données", new SujetAnalysis("Bases de données", "fr"));
+        CACHE.put("création d'un erp pour la gestion rh", new SujetAnalysis("Génie Logiciel", "fr"));
+        // ID
+        CACHE.put("predictive modeling for customer churn", new SujetAnalysis("Data Science", "ag"));
+        CACHE.put("analyse de données et création de dashboard bi", new SujetAnalysis("Data Science", "fr"));
+        CACHE.put("implémentation d'un data lake avec hadoop", new SujetAnalysis("Bases de données", "fr"));
+        CACHE.put("real-time data streaming pipeline using kafka", new SujetAnalysis("Data Science", "ag"));
+        CACHE.put("machine learning pour la détection de fraudes", new SujetAnalysis("Intelligence Artificielle", "fr"));
+        CACHE.put("web scraping et analyse de sentiments", new SujetAnalysis("Data Science", "fr"));
+        // TDIA
+        CACHE.put("deep learning for medical image segmentation", new SujetAnalysis("Intelligence Artificielle", "ag"));
+        CACHE.put("création d'un chatbot intelligent avec nlp", new SujetAnalysis("Intelligence Artificielle", "fr"));
+        CACHE.put("reconnaissance faciale et sécurité", new SujetAnalysis("Intelligence Artificielle", "fr"));
+        CACHE.put("implementation of a recommendation system", new SujetAnalysis("Intelligence Artificielle", "ag"));
+        CACHE.put("transformation digitale des processus d'une entreprise", new SujetAnalysis("Génie Logiciel", "fr"));
+        CACHE.put("génération de texte avec des modèles llm", new SujetAnalysis("Intelligence Artificielle", "fr"));
     }
 
     /** Charge config.properties depuis le classpath */

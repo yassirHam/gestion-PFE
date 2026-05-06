@@ -56,7 +56,7 @@ public class PlanningServiceImpl implements PlanningService {
     // ─────────────────────────────────────────────────────────────────────────
 
     @Override
-    public List<Soutenance> genererPlanning(List<String> filieres, List<String> log, List<Long> selectedSalles) {
+    public List<Soutenance> genererPlanning(List<String> filieres, List<String> log, List<Long> selectedSalles, String startDate) {
 
         List<Affectation> allAffectations = affDao.findAllWithDetails();
         // Filter by selected filières if provided
@@ -120,8 +120,25 @@ public class PlanningServiceImpl implements PlanningService {
         }
 
         // Pre-compute the 4 dates
+        int startYear = START_YEAR;
+        int startMonth = START_MONTH;
+        int startDay = START_DAY;
+        
+        if (startDate != null && !startDate.trim().isEmpty()) {
+            try {
+                String[] parts = startDate.split("-");
+                if (parts.length == 3) {
+                    startYear = Integer.parseInt(parts[0]);
+                    startMonth = Integer.parseInt(parts[1]) - 1; // Calendar month is 0-based
+                    startDay = Integer.parseInt(parts[2]);
+                }
+            } catch (Exception e) {
+                log.add("⚠️ Format de date invalide, utilisation de la date par défaut.");
+            }
+        }
+
         Calendar baseCal = Calendar.getInstance();
-        baseCal.set(START_YEAR, START_MONTH, START_DAY, 0, 0, 0);
+        baseCal.set(startYear, startMonth, startDay, 0, 0, 0);
         baseCal.set(Calendar.MILLISECOND, 0);
 
         List<String> validDates = new ArrayList<>();

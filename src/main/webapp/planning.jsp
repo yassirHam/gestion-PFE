@@ -218,6 +218,9 @@
                         </c:if>
                     </div>
 
+                    <label class="form-label small fw-semibold text-muted">Date de début des soutenances</label>
+                    <input type="date" class="form-control mb-4" name="startDate" value="2026-06-23" required>
+
                     <button type="submit" class="btn btn-primary w-100" ${!hasAffectations ? 'disabled' : ''}>
                         <c:choose>
                             <c:when test="${not empty soutenances}">Régénérer le Planning</c:when>

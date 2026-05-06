@@ -981,7 +981,9 @@ public class FrontController extends HttpServlet {
         @SuppressWarnings("unchecked")
         List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
 
-        service.genererPlanning(lastFilieres, debug, selectedSalles);
+        String startDate = req.getParameter("startDate");
+
+        service.genererPlanning(lastFilieres, debug, selectedSalles, startDate);
 
         List<Soutenance> soutenances = service.getAllSoutenances();
         Map<Long, String> colors = service.getProfessorColors();

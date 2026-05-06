@@ -88,8 +88,83 @@
     
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2 class="fw-bold text-dark"><i class="fa-solid fa-chart-line me-2 text-primary"></i> Dashboard Analytique</h2>
-        <span class="badge bg-secondary p-2">Année 2025/2026</span>
+        <div class="d-flex align-items-center">
+            <form action="dashboard.do" method="get" class="d-flex me-3">
+                <input type="text" name="q" class="form-control form-control-sm me-2" placeholder="Chercher un étudiant ou un prof..." value="${searchQuery}" required>
+                <button type="submit" class="btn btn-sm btn-primary"><i class="fa-solid fa-search"></i></button>
+            </form>
+            <span class="badge bg-secondary p-2">Année 2025/2026</span>
+        </div>
     </div>
+
+    <!-- ===== RECHERCHE RESULTATS ===== -->
+    <c:if test="${not empty searchResult}">
+        <div class="card mb-4 border-primary shadow-sm">
+            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+                <h5 class="mb-0"><i class="fa-solid fa-magnifying-glass me-2"></i> Résultat de la recherche</h5>
+                <a href="dashboard.do" class="text-white"><i class="fa-solid fa-xmark"></i></a>
+            </div>
+            <div class="card-body">
+                <c:choose>
+                    <c:when test="${searchResult.searchType == 'NONE'}">
+                        <div class="alert alert-warning mb-0"><i class="fa-solid fa-circle-exclamation me-2"></i> Aucun étudiant ou professeur trouvé pour "<strong>${searchQuery}</strong>".</div>
+                    </c:when>
+
+                    <c:when test="${searchResult.searchType == 'ETUDIANT'}">
+                        <h5 class="text-primary fw-bold"><i class="fa-solid fa-user-graduate me-2"></i> Étudiant: ${searchResult.etu.nomE} ${searchResult.etu.prenomE}</h5>
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item"><strong>Filière :</strong> ${searchResult.etu.filiere}</li>
+                            <li class="list-group-item"><strong>Encadrant :</strong> ${searchResult.affectation.encadrant.nom} ${searchResult.affectation.encadrant.prenom}</li>
+                            <c:if test="${not empty searchResult.soutenance}">
+                                <li class="list-group-item list-group-item-success">
+                                    <strong><i class="fa-solid fa-calendar-check text-success me-1"></i> Soutenance planifiée :</strong> 
+                                    Le ${searchResult.soutenance.dateSoutenance.replace('-', '/')} à ${searchResult.soutenance.heureSoutenance} — Salle : ${searchResult.soutenance.salle.num_salle}
+                                </li>
+                            </c:if>
+                            <c:if test="${empty searchResult.soutenance}">
+                                <li class="list-group-item list-group-item-warning"><i class="fa-solid fa-clock text-warning me-1"></i> Soutenance non encore planifiée.</li>
+                            </c:if>
+                        </ul>
+                    </c:when>
+
+                    <c:when test="${searchResult.searchType == 'PROFESSEUR'}">
+                        <h5 class="text-success fw-bold"><i class="fa-solid fa-chalkboard-user me-2"></i> Professeur: ${searchResult.prof.nom} ${searchResult.prof.prenom}</h5>
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <h6 class="fw-bold border-bottom pb-2">Étudiants Encadrés (${searchResult.encadrements.size()})</h6>
+                                <c:choose>
+                                    <c:when test="${empty searchResult.encadrements}"><p class="text-muted small">Aucun étudiant encadré.</p></c:when>
+                                    <c:otherwise>
+                                        <ul class="list-group list-group-flush small">
+                                            <c:forEach var="aff" items="${searchResult.encadrements}">
+                                                <li class="list-group-item"><i class="fa-solid fa-user-graduate me-1 text-primary"></i> ${aff.etudiant.nomE} ${aff.etudiant.prenomE} (${aff.etudiant.filiere})</li>
+                                            </c:forEach>
+                                        </ul>
+                                    </c:otherwise>
+                                </c:choose>
+                            </div>
+                            <div class="col-md-6">
+                                <h6 class="fw-bold border-bottom pb-2">Soutenances Prévues (${searchResult.soutenances.size()})</h6>
+                                <c:choose>
+                                    <c:when test="${empty searchResult.soutenances}"><p class="text-muted small">Aucune soutenance prévue (ou planning non généré).</p></c:when>
+                                    <c:otherwise>
+                                        <ul class="list-group list-group-flush small">
+                                            <c:forEach var="sout" items="${searchResult.soutenances}">
+                                                <li class="list-group-item">
+                                                    <strong>${sout.dateSoutenance.replace('-', '/')} à ${sout.heureSoutenance}</strong> (Salle ${sout.salle.num_salle})
+                                                    <br><span class="text-muted">Étudiant: ${sout.etudiant.nomE} ${sout.etudiant.prenomE}</span>
+                                                </li>
+                                            </c:forEach>
+                                        </ul>
+                                    </c:otherwise>
+                                </c:choose>
+                            </div>
+                        </div>
+                    </c:when>
+                </c:choose>
+            </div>
+        </div>
+    </c:if>
 
     <c:if test="${empty totalEtudiants || totalEtudiants == 0}">
         <div class="alert alert-warning shadow-sm border-0 rounded-3">

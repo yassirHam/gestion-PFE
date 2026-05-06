@@ -41,6 +41,9 @@ public interface PfeService {
     Map<String, Integer> getSoutenancesParProf(List<String> filieresFiltre);
     int getTotalSoutenances(List<String> filieresFiltre);
 
+    // Search operations
+    Map<String, Object> searchDashboard(String query);
+
     // Planning operations
     List<Soutenance> genererPlanning(List<String> filieres, List<String> debugLog, List<Long> selectedSalles, String startDate);
     List<Soutenance> getAllSoutenances();

@@ -316,6 +316,76 @@ public class PfeServiceImpl implements PfeService {
         return count;
     }
 
+    @Override
+    public java.util.Map<String, Object> searchDashboard(String query) {
+        java.util.Map<String, Object> result = new java.util.HashMap<>();
+        if (query == null || query.trim().isEmpty()) {
+            result.put("searchType", "NONE");
+            return result;
+        }
+        query = query.toLowerCase().trim();
+
+        List<Affectation> allAff = affDao.findAllWithDetails();
+        List<Soutenance> allSout = soutDao.findAll();
+
+        // Chercher un étudiant en premier
+        for (Affectation a : allAff) {
+            Etudiant e = a.getEtudiant();
+            if (e != null && ((e.getNomE() != null && e.getNomE().toLowerCase().contains(query)) ||
+                              (e.getPrenomE() != null && e.getPrenomE().toLowerCase().contains(query)))) {
+                result.put("searchType", "ETUDIANT");
+                result.put("etu", e);
+                result.put("affectation", a);
+                // Trouver la soutenance
+                for (Soutenance s : allSout) {
+                    if (s.getAffectation() != null && s.getAffectation().getIda().equals(a.getIda())) {
+                        result.put("soutenance", s);
+                        break;
+                    }
+                }
+                return result;
+            }
+        }
+
+        // Sinon chercher un professeur
+        for (Professeur p : profDao.findAll()) {
+            if ((p.getNom() != null && p.getNom().toLowerCase().contains(query)) ||
+                (p.getPrenom() != null && p.getPrenom().toLowerCase().contains(query))) {
+                
+                result.put("searchType", "PROFESSEUR");
+                result.put("prof", p);
+                
+                List<Affectation> encadrements = new java.util.ArrayList<>();
+                for (Affectation a : allAff) {
+                    if (a.getEncadrant() != null && a.getEncadrant().getIdp().equals(p.getIdp())) {
+                        encadrements.add(a);
+                    }
+                }
+                result.put("encadrements", encadrements);
+                
+                List<Soutenance> soutenances = new java.util.ArrayList<>();
+                for (Soutenance s : allSout) {
+                    if (s.getAffectation() == null) continue;
+                    boolean isEnc = s.getAffectation().getEncadrant() != null && s.getAffectation().getEncadrant().getIdp().equals(p.getIdp());
+                    boolean isJury = false;
+                    if (s.getJury() != null) {
+                        isJury = (s.getJury().getPresident() != null && s.getJury().getPresident().getIdp().equals(p.getIdp())) ||
+                                 (s.getJury().getRapporteur1() != null && s.getJury().getRapporteur1().getIdp().equals(p.getIdp())) ||
+                                 (s.getJury().getRapporteur2() != null && s.getJury().getRapporteur2().getIdp().equals(p.getIdp()));
+                    }
+                    if (isEnc || isJury) {
+                        soutenances.add(s);
+                    }
+                }
+                result.put("soutenances", soutenances);
+                return result;
+            }
+        }
+
+        result.put("searchType", "NONE");
+        return result;
+    }
+
     // ── Planning delegation ──────────────────────────────────────────────────
 
     @Override

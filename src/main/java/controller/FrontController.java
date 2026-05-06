@@ -145,8 +145,16 @@ public class FrontController extends HttpServlet {
 
     @SuppressWarnings("unchecked")
     private void doDashboard(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
+        String query = req.getParameter("q");
+        if (query != null && !query.trim().isEmpty()) {
+            Map<String, Object> searchResult = service.searchDashboard(query);
+            req.setAttribute("searchResult", searchResult);
+            req.setAttribute("searchQuery", query);
+        }
 
+        @SuppressWarnings("unchecked")
+        List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
+        
         int totalEtudiants = service.getTotalEtudiantsAffectes(lastFilieres);
         int totalProfs = service.getTotalProfesseursEncadrants(lastFilieres);
         int totalSoutenances = service.getTotalSoutenances(lastFilieres);
@@ -657,7 +665,6 @@ public class FrontController extends HttpServlet {
         generateAffectationDocxToStream(resp.getOutputStream(), lastFilieres);
     }
 
-    
     private void generateAffectationDocxToStream(java.io.OutputStream os, List<String> lastFilieres) throws IOException {
         List<Affectation> all = service.getAllAffectationsWithDetails();
 

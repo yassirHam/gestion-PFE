@@ -38,36 +38,13 @@ public class NlpServiceImpl implements NlpService {
                 .baseUrl(baseUrl)
                 .modelName(model_)
                 .temperature(0.2)
-                .maxTokens(256)
+                .maxTokens(2048)
                 .maxRetries(0)
-                .timeout(java.time.Duration.ofSeconds(3)) // Timeout très court pour ne pas bloquer si l'API rame
+                .timeout(java.time.Duration.ofSeconds(30)) // Timeout étendu à 30s pour laisser le temps au modèle de générer le batch entier
                 .build();
     }
 
-    // Pré-remplissage du cache pour la démo afin d'éviter l'API au maximum
-    static {
-        // GI
-        CACHE.put("development of a web application for project management", new SujetAnalysis("Développement Web", "ag"));
-        CACHE.put("conception d'une application mobile de gestion de stock", new SujetAnalysis("Développement Web", "fr"));
-        CACHE.put("mise en place d'une architecture microservices", new SujetAnalysis("Développement Web", "fr"));
-        CACHE.put("building an e-commerce platform with spring boot and react", new SujetAnalysis("Développement Web", "ag"));
-        CACHE.put("optimisation des performances d'une base de données", new SujetAnalysis("Bases de données", "fr"));
-        CACHE.put("création d'un erp pour la gestion rh", new SujetAnalysis("Génie Logiciel", "fr"));
-        // ID
-        CACHE.put("predictive modeling for customer churn", new SujetAnalysis("Data Science", "ag"));
-        CACHE.put("analyse de données et création de dashboard bi", new SujetAnalysis("Data Science", "fr"));
-        CACHE.put("implémentation d'un data lake avec hadoop", new SujetAnalysis("Bases de données", "fr"));
-        CACHE.put("real-time data streaming pipeline using kafka", new SujetAnalysis("Data Science", "ag"));
-        CACHE.put("machine learning pour la détection de fraudes", new SujetAnalysis("Intelligence Artificielle", "fr"));
-        CACHE.put("web scraping et analyse de sentiments", new SujetAnalysis("Data Science", "fr"));
-        // TDIA
-        CACHE.put("deep learning for medical image segmentation", new SujetAnalysis("Intelligence Artificielle", "ag"));
-        CACHE.put("création d'un chatbot intelligent avec nlp", new SujetAnalysis("Intelligence Artificielle", "fr"));
-        CACHE.put("reconnaissance faciale et sécurité", new SujetAnalysis("Intelligence Artificielle", "fr"));
-        CACHE.put("implementation of a recommendation system", new SujetAnalysis("Intelligence Artificielle", "ag"));
-        CACHE.put("transformation digitale des processus d'une entreprise", new SujetAnalysis("Génie Logiciel", "fr"));
-        CACHE.put("génération de texte avec des modèles llm", new SujetAnalysis("Intelligence Artificielle", "fr"));
-    }
+
 
     /** Charge config.properties depuis le classpath */
     private static java.util.Properties loadConfig() {
@@ -187,5 +164,94 @@ public class NlpServiceImpl implements NlpService {
         }
 
         return new SujetAnalysis(specialite, language);
+    }
+
+    @Override
+    public java.util.Map<String, SujetAnalysis> analyzeSujetsBatch(List<String> sujets, List<String> specialitesDispos) {
+        java.util.Map<String, SujetAnalysis> results = new java.util.HashMap<>();
+        
+        // Filtrer les sujets valides et non en cache
+        List<String> sujetsToAnalyze = new java.util.ArrayList<>();
+        for (String s : sujets) {
+            if (s == null || s.trim().isEmpty()) continue;
+            String key = s.trim().toLowerCase();
+            if (CACHE.containsKey(key)) {
+                results.put(s, CACHE.get(key));
+            } else if (!sujetsToAnalyze.contains(s)) {
+                sujetsToAnalyze.add(s);
+            }
+        }
+        
+        if (sujetsToAnalyze.isEmpty()) {
+            return results;
+        }
+        
+        LOG.info("🚀 Batch NLP analysis pour " + sujetsToAnalyze.size() + " sujets inédits en UNE SEULE requête...");
+        
+        String specialitesStr = String.join(", ", specialitesDispos);
+        
+        StringBuilder promptBuilder = new StringBuilder();
+        promptBuilder.append("Tu es un expert qui classe des sujets de PFE.\n");
+        promptBuilder.append("Pour CHAQUE sujet ci-dessous, donne la Spécialité et la Langue.\n");
+        promptBuilder.append("- Spécialité: choisis EXCLUSIVEMENT l'une de ces valeurs exactes : [").append(specialitesStr).append("]\n");
+        promptBuilder.append("- Langue: 'fr' (Français) ou 'ag' (Anglais).\n");
+        promptBuilder.append("RÉPONDS UNIQUEMENT avec le format suivant, une ligne par sujet (séparateur = pipe |) :\n");
+        promptBuilder.append("ID|Spécialité|Langue\n\n");
+        promptBuilder.append("SUJETS:\n");
+        
+        for (int i = 0; i < sujetsToAnalyze.size(); i++) {
+            promptBuilder.append(i).append("|").append(sujetsToAnalyze.get(i)).append("\n");
+        }
+        
+        try {
+            // Un seul appel pour tout le batch ! Pas de timeout ou sleep restrictif requis ici
+            String response = model.generate(promptBuilder.toString());
+            
+            // Parsing de la réponse
+            String[] lines = response.split("\n");
+            for (String line : lines) {
+                String[] parts = line.split("\\|");
+                if (parts.length >= 3) {
+                    try {
+                        int id = Integer.parseInt(parts[0].trim());
+                        if (id >= 0 && id < sujetsToAnalyze.size()) {
+                            String originalSujet = sujetsToAnalyze.get(id);
+                            String spec = parts[1].trim();
+                            String lang = parts[2].trim().toLowerCase();
+                            
+                            // Nettoyage
+                            if (!lang.equals("ag")) lang = "fr";
+                            // Vérifier si la spé existe vraiment, sinon fallback
+                            final String finalSpec = spec.toLowerCase();
+                            String matchedSpec = specialitesDispos.stream()
+                                    .filter(s -> s.toLowerCase().contains(finalSpec) || finalSpec.contains(s.toLowerCase()))
+                                    .findFirst()
+                                    .orElse(specialitesDispos.isEmpty() ? "Informatique" : specialitesDispos.get(0));
+                                    
+                            SujetAnalysis analysis = new SujetAnalysis(matchedSpec, lang);
+                            
+                            // Ajout au cache et au résultat
+                            CACHE.put(originalSujet.trim().toLowerCase(), analysis);
+                            results.put(originalSujet, analysis);
+                        }
+                    } catch (NumberFormatException e) {
+                        // Ignore ligne invalide
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Batch NLP API failed - Reason: " + e.getMessage());
+        }
+        
+        // Fallback pour ceux qui ont échoué ou n'ont pas été bien parsés
+        for (String s : sujetsToAnalyze) {
+            if (!results.containsKey(s)) {
+                SujetAnalysis fallback = new SujetAnalysis(specialitesDispos.isEmpty() ? "Informatique" : specialitesDispos.get(0), "fr");
+                CACHE.put(s.trim().toLowerCase(), fallback);
+                results.put(s, fallback);
+            }
+        }
+        
+        return results;
     }
 }

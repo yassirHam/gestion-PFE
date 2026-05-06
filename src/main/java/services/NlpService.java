@@ -15,4 +15,12 @@ public interface NlpService {
      * @return SujetAnalysis(bestSpecialite, language)
      */
     SujetAnalysis analyzeSujet(String sujet, List<String> specialitesDispos);
+
+    /**
+     * Analyse une liste de sujets en un seul appel API (Batching) pour éviter le rate limit.
+     * @param sujets             La liste des sujets à analyser
+     * @param specialitesDispos  Liste des spécialités
+     * @return Map associant chaque sujet à son analyse
+     */
+    java.util.Map<String, SujetAnalysis> analyzeSujetsBatch(List<String> sujets, List<String> specialitesDispos);
 }

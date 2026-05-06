@@ -171,33 +171,49 @@ public class PlanningServiceImpl implements PlanningService {
             projects.add(proj);
         }
 
+        // ── BATCH NLP Analysis (Pre-processing) ─────────────────────────────────
+        List<String> specialitesDispo = new ArrayList<>();
+        for (Professeur p : allProfs) {
+            if (p.getSpecialite() != null && !p.getSpecialite().trim().isEmpty()) {
+                specialitesDispo.add(p.getSpecialite().trim());
+            }
+        }
+        specialitesDispo = new ArrayList<>(new LinkedHashSet<>(specialitesDispo)); // Remove duplicates
+
+        List<String> allUniqueSujets = new ArrayList<>();
+        for (List<Affectation> project : projects) {
+            String s = project.get(0).getEtudiant().getSujet_stage();
+            if (s != null && !s.trim().isEmpty() && !allUniqueSujets.contains(s)) {
+                allUniqueSujets.add(s);
+            }
+        }
+        
+        java.util.Map<String, SujetAnalysis> nlpBatchResults = new java.util.HashMap<>();
+        if (!allUniqueSujets.isEmpty()) {
+            try {
+                log.add("🤖 Démarrage analyse NLP Batch pour " + allUniqueSujets.size() + " sujets uniques...");
+                nlpBatchResults = nlpService.analyzeSujetsBatch(allUniqueSujets, specialitesDispo);
+                log.add("✅ Analyse NLP Batch terminée !");
+            } catch (Exception e) {
+                log.add("⚠️ Erreur NLP Batch : " + e.getMessage());
+            }
+        }
+
         for (List<Affectation> project : projects) {
             Affectation mainAff = project.get(0);
             Etudiant etudiant = mainAff.getEtudiant(); // Lead student for logging
             Professeur encadrant = mainAff.getEncadrant();
 
-            // ── NLP Analysis ─────────────────────────────────────────────────
+            // ── Retrieve NLP Result ─────────────────────────────────────────────────
             String sujet = etudiant.getSujet_stage();
-            List<String> specialitesDispo = new ArrayList<>();
-            for (Professeur p : allProfs) {
-                if (p.getSpecialite() != null && !p.getSpecialite().trim().isEmpty()) {
-                    specialitesDispo.add(p.getSpecialite().trim());
-                }
-            }
-            // Remove duplicates
-            specialitesDispo = new ArrayList<>(new LinkedHashSet<>(specialitesDispo));
-
             SujetAnalysis nlpResult = null;
             if (sujet != null && !sujet.trim().isEmpty()) {
-                try {
-                    nlpResult = nlpService.analyzeSujet(sujet, specialitesDispo);
+                nlpResult = nlpBatchResults.get(sujet);
+                if (nlpResult != null) {
                     log.add("🤖 NLP [" + etudiant.getNomE() + "] sujet='" + sujet + "' → " + nlpResult);
-                    // Update language field in DB
                     if (nlpResult.getLanguage() != null) {
                         etudiant.setLanguage(nlpResult.getLanguage());
                     }
-                } catch (Exception e) {
-                    log.add("⚠️ NLP error for " + etudiant.getNomE() + " : " + e.getMessage());
                 }
             }
 

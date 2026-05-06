@@ -386,21 +386,26 @@ public class PlanningServiceImpl implements PlanningService {
         available.sort(Comparator.comparingInt((Professeur p) -> profJuryCount.getOrDefault(p.getIdp(), 0))
                 .thenComparingInt(p -> (int)(Math.random() * 1000)));
 
+        int minLoad = available.isEmpty() ? 0 : profJuryCount.getOrDefault(available.get(0).getIdp(), 0);
+        int MAX_LOAD_GAP = 3; // Un prof ne peut pas avoir 4 jurys de plus que le prof le moins chargé
+
         // ── NLP-aware selection ────────────────────────────────────────────
         if (nlp != null) {
             String targetSpec  = nlp.getBestSpecialite();    // tech specialite
             boolean needEnglish = nlp.isEnglish();
 
-            // Find best TECH match (Rapporteur 1)
+            // Find best TECH match (Rapporteur 1) - avec protection d'équité
             Professeur techProf = available.stream()
+                    .filter(p -> profJuryCount.getOrDefault(p.getIdp(), 0) <= minLoad + MAX_LOAD_GAP)
                     .filter(p -> p.getSpecialite() != null &&
                                  p.getSpecialite().toLowerCase().contains(targetSpec != null ? targetSpec.toLowerCase() : ""))
                     .findFirst().orElse(null);
 
-            // Find ENGLISH prof (Rapporteur 2, only when needEnglish)
+            // Find ENGLISH prof (Rapporteur 2) - avec protection d'équité
             Professeur englishProf = null;
             if (needEnglish) {
                 englishProf = available.stream()
+                        .filter(p -> profJuryCount.getOrDefault(p.getIdp(), 0) <= minLoad + MAX_LOAD_GAP)
                         .filter(p -> {
                             String d = p.getDiscipline() != null ? p.getDiscipline().toLowerCase() : "";
                             String s = p.getSpecialite()  != null ? p.getSpecialite().toLowerCase()  : "";
@@ -415,13 +420,20 @@ public class PlanningServiceImpl implements PlanningService {
                 return new Professeur[]{techProf, englishProf};
             }
             if (techProf != null && !needEnglish) {
-                // Pick any remaining prof as Rapporteur 2
+                // Pick any remaining prof as Rapporteur 2 (le moins chargé grâce au tri)
                 Professeur r2 = available.stream()
                         .filter(p -> !p.getIdp().equals(techProf.getIdp()))
                         .findFirst().orElse(null);
                 if (r2 != null) return new Professeur[]{techProf, r2};
             }
-            // Partial NLP match — fall through to classic info-constraint selection
+            if (techProf == null && englishProf != null) {
+                // Si pas de prof technique exact mais prof d'anglais dispo, on prend l'anglais + le prof tech le moins chargé
+                Professeur r1 = available.stream()
+                        .filter(p -> !p.getIdp().equals(englishProf.getIdp()))
+                        .findFirst().orElse(null);
+                if (r1 != null) return new Professeur[]{r1, englishProf};
+            }
+            // Partial or No NLP match — fall through to classic info-constraint selection
         }
 
         // ── Classic fallback: at least 2/3 jury members must be Informatique ──

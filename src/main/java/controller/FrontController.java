@@ -928,7 +928,6 @@ public class FrontController extends HttpServlet {
         return System.getProperty("user.home") + java.io.File.separator + "plannings_history";
     }
 
-
     private void doDownloadHistory(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         String filename = req.getParameter("file");
         if (filename == null || filename.contains("..") || (!filename.startsWith("Planning_") && !filename.startsWith("Affectation_"))) {

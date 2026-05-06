@@ -157,23 +157,33 @@
                                             <th>A — Colonne 1</th>
                                             <th>B — Colonne 2</th>
                                             <th>C — Colonne 3</th>
+                                            <th>D — Colonne 4</th>
                                         </tr>
                                     </thead>
                                     <tbody>
                                         <tr class="table-light fw-semibold">
                                             <td><span class="badge bg-secondary">NOM</span></td>
                                             <td><span class="badge bg-secondary">PRÉNOM</span></td>
-                                            <td><span class="badge bg-secondary">SPÉCIALITÉ</span></td>
+                                            <td><span class="badge bg-secondary">DISCIPLINE</span></td>
+                                            <td><span class="badge bg-info text-dark">SPÉCIALITÉ</span></td>
                                         </tr>
                                         <tr class="text-muted fst-italic">
                                             <td>AMRANI</td>
                                             <td>Karim</td>
                                             <td>Informatique</td>
+                                            <td>Intelligence Artificielle</td>
                                         </tr>
                                         <tr class="text-muted fst-italic">
                                             <td>ZOUAK</td>
                                             <td>Fatima</td>
+                                            <td>Informatique</td>
                                             <td>Réseaux</td>
+                                        </tr>
+                                        <tr class="text-muted fst-italic">
+                                            <td>SMITH</td>
+                                            <td>John</td>
+                                            <td>Anglais</td>
+                                            <td>Anglais</td>
                                         </tr>
                                     </tbody>
                                 </table>

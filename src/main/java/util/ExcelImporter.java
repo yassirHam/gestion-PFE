@@ -73,7 +73,8 @@ public class ExcelImporter {
 
                 p.setNom(getCellValue(row, 0));
                 p.setPrenom(getCellValue(row, 1));
-                p.setSpecialite(getCellValue(row, 2));
+                p.setDiscipline(getCellValue(row, 2));
+                p.setSpecialite(getCellValue(row, 3));
 
                 list.add(p);
             }

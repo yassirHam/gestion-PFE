@@ -25,6 +25,7 @@ public interface PfeService {
     List<Affectation> getAllAffectationsWithDetails();
     void deleteAllAffectations();
     void lancerAffectationGlobale(List<String> filieres, List<String> debugLog);
+    void restoreAffectation(java.io.File backupFile) throws java.io.IOException;
     
     // Fichier operations
     List<FichierListe> getAllFichiers();

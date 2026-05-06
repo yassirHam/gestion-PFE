@@ -107,6 +107,9 @@ public class FrontController extends HttpServlet {
             case "/exportDocx.do":
                 doExportDocx(req, resp);
                 break;
+            case "/restoreAffectation.do":
+                doRestoreAffectation(req, resp);
+                break;
             case "/planning.do":
                 doPlanning(req, resp);
                 break;
@@ -220,23 +223,49 @@ public class FrontController extends HttpServlet {
     private void doAffectation(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         req.setAttribute("fichiers", service.getAllFichiers());
         
-        // Load History
+        // Load History (Group by timestamp)
         java.io.File historyDir = new java.io.File(getHistoryFolder());
-        List<String> historyFiles = new ArrayList<>();
+        List<String> historyTimestamps = new ArrayList<>();
         if (historyDir.exists() && historyDir.isDirectory()) {
             java.io.File[] files = historyDir.listFiles();
             if (files != null) {
+                java.util.Set<String> tsSet = new java.util.HashSet<>();
                 for (java.io.File f : files) {
                     if (f.isFile() && f.getName().startsWith("Affectation_")) {
-                        historyFiles.add(f.getName());
+                        // Extract timestamp: Affectation_YYYY-MM-DD_HH-mm-ss.ext
+                        String name = f.getName();
+                        int extIndex = name.lastIndexOf('.');
+                        if (extIndex > 12) {
+                            tsSet.add(name.substring(12, extIndex));
+                        }
                     }
                 }
+                historyTimestamps.addAll(tsSet);
             }
         }
-        java.util.Collections.sort(historyFiles, java.util.Collections.reverseOrder());
-        req.setAttribute("historyFiles", historyFiles);
+        java.util.Collections.sort(historyTimestamps, java.util.Collections.reverseOrder());
+        req.setAttribute("historyTimestamps", historyTimestamps);
+        // req.setAttribute("historyFiles", historyFiles); replaced by historyTimestamps
 
         req.getRequestDispatcher("affectation.jsp").forward(req, resp);
+    }
+    
+    private void doRestoreAffectation(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        String ts = req.getParameter("timestamp");
+        if (ts != null && !ts.isEmpty()) {
+            java.io.File txtFile = new java.io.File(getHistoryFolder(), "Affectation_" + ts + ".txt");
+            if (txtFile.exists()) {
+                try {
+                    service.restoreAffectation(txtFile);
+                    req.getSession().setAttribute("affectationDone", true);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            } else {
+                req.getSession().setAttribute("restoreError", "Désolé, cette affectation est trop ancienne et ne possède pas de sauvegarde de données (uniquement PDF/Word).");
+            }
+        }
+        resp.sendRedirect("affectation.do");
     }
     private void doTemplateEtudiants(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
@@ -396,12 +425,20 @@ public class FrontController extends HttpServlet {
         
         String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
         String pdfName = "Affectation_" + timestamp + ".pdf";
-        String docxName = "Affectation_" + timestamp + ".docx";
+        String txtName = "Affectation_" + timestamp + ".txt";
         
         try (java.io.FileOutputStream pdfOut = new java.io.FileOutputStream(new java.io.File(historyDir, pdfName));
-             java.io.FileOutputStream docxOut = new java.io.FileOutputStream(new java.io.File(historyDir, docxName))) {
+             java.io.FileOutputStream docxOut = new java.io.FileOutputStream(new java.io.File(historyDir, docxName));
+             java.io.PrintWriter txtOut = new java.io.PrintWriter(new java.io.File(historyDir, txtName))) {
             generateAffectationPdfToStream(pdfOut, filieres);
             generateAffectationDocxToStream(docxOut, filieres);
+            
+            // Save raw data for restore
+            for (entities.Affectation a : service.getAllAffectationsWithDetails()) {
+                if (a.getEtudiant() != null && a.getEncadrant() != null) {
+                    txtOut.println(a.getEtudiant().getIde() + "," + a.getEncadrant().getIdp());
+                }
+            }
         } catch (Exception e) {
             e.printStackTrace();
         }

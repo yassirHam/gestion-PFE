@@ -17,7 +17,7 @@ import java.util.*;
  *  - Spread load: encadrants must not have all their soutenances on the same day
  *  - Spread slots: fill all hours (9h, 10h...) evenly across rooms
  *  - EQUITY: balanced jury membership across all professors
- *  - INFO REQUIRED: Each jury must have at least 1 prof with "info" in discipline/specialite
+ *  - INFO REQUIRED: Each jury must have at least 2 prof with "info" in discipline/specialite
  */
 public class PlanningServiceImpl implements PlanningService {
 
@@ -387,7 +387,7 @@ public class PlanningServiceImpl implements PlanningService {
                 .thenComparingInt(p -> (int)(Math.random() * 1000)));
 
         int minLoad = available.isEmpty() ? 0 : profJuryCount.getOrDefault(available.get(0).getIdp(), 0);
-        int MAX_LOAD_GAP = 3; // Un prof ne peut pas avoir 4 jurys de plus que le prof le moins chargé
+        int MAX_LOAD_GAP = 2; // Un prof ne peut pas avoir 3 jurys de plus que le prof le moins chargé (écart max = 2)
 
         // ── NLP-aware selection ────────────────────────────────────────────
         if (nlp != null) {

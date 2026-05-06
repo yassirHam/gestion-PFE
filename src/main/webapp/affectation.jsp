@@ -314,26 +314,40 @@
     <div class="card p-4 mt-4">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h5 class="fw-bold mb-0"><i class="fa-solid fa-clock-rotate-left text-primary me-2"></i> Historique des affectations</h5>
-            <c:if test="${not empty historyFiles}">
+            <c:if test="${not empty historyTimestamps}">
                 <a href="clearHistory.do?type=affectation" class="btn btn-sm btn-outline-danger" onclick="return confirm('Supprimer TOUT l\'historique des affectations ?')">
                     <i class="fa-solid fa-trash-can me-1"></i> Vider l'historique
                 </a>
             </c:if>
         </div>
+        
+        <c:if test="${not empty sessionScope.restoreError}">
+            <div class="alert alert-danger">
+                <i class="fa-solid fa-triangle-exclamation me-2"></i> ${sessionScope.restoreError}
+            </div>
+            <c:remove var="restoreError" scope="session"/>
+        </c:if>
+
         <c:choose>
-            <c:when test="${not empty historyFiles}">
+            <c:when test="${not empty historyTimestamps}">
                 <div class="table-responsive">
                     <table class="table table-hover align-middle">
                         <tbody>
-                            <c:forEach var="file" items="${historyFiles}">
+                            <c:forEach var="ts" items="${historyTimestamps}">
                                 <tr>
                                     <td>
-                                        <i class="fa-solid ${file.endsWith('.pdf') ? 'fa-file-pdf text-danger' : 'fa-file-word text-primary'} me-2"></i>
-                                        ${file}
+                                        <i class="fa-solid fa-clock-rotate-left text-muted me-2"></i>
+                                        <strong>Affectation du ${ts.replace('_', ' à ').replace('-', '/')}</strong>
                                     </td>
                                     <td class="text-end">
-                                        <a href="downloadHistory.do?file=${file}" class="btn btn-sm btn-outline-secondary">
-                                            <i class="fa-solid fa-download"></i> Télécharger
+                                        <a href="restoreAffectation.do?timestamp=${ts}" class="btn btn-sm btn-outline-success me-2" onclick="return confirm('Attention : Restaurer cette affectation va écraser l\'affectation actuelle. Continuer ?')">
+                                            <i class="fa-solid fa-clock-rotate-left"></i> Utiliser cette affectation
+                                        </a>
+                                        <a href="downloadHistory.do?file=Affectation_${ts}.pdf" class="btn btn-sm btn-outline-danger me-1" title="PDF">
+                                            <i class="fa-solid fa-file-pdf"></i>
+                                        </a>
+                                        <a href="downloadHistory.do?file=Affectation_${ts}.docx" class="btn btn-sm btn-outline-primary" title="Word">
+                                            <i class="fa-solid fa-file-word"></i>
                                         </a>
                                     </td>
                                 </tr>

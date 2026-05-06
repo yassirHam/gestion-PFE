@@ -88,6 +88,34 @@ public class PfeServiceImpl implements PfeService {
     }
 
     @Override
+    public void restoreAffectation(java.io.File backupFile) throws java.io.IOException {
+        affDao.deleteAll();
+        
+        java.util.List<String> lines = java.nio.file.Files.readAllLines(backupFile.toPath());
+        for (String line : lines) {
+            String[] parts = line.split(",");
+            if (parts.length == 2) {
+                try {
+                    Long ide = Long.parseLong(parts[0]);
+                    Long idp = Long.parseLong(parts[1]);
+                    
+                    Etudiant etu = etuDao.findById(ide);
+                    Professeur prof = profDao.findById(idp);
+                    
+                    if (etu != null && prof != null) {
+                        Affectation a = new Affectation();
+                        a.setEtudiant(etu);
+                        a.setEncadrant(prof);
+                        affDao.save(a);
+                    }
+                } catch (Exception e) {
+                    // Ignore corrupted line
+                }
+            }
+        }
+    }
+
+    @Override
     public void lancerAffectationGlobale(List<String> filieres, List<String> debugLog) {
         List<Etudiant> etudiants = etuDao.findByFilieres(filieres);
         List<Professeur> profs = profDao.findAll();

@@ -649,7 +649,6 @@ public class FrontController extends HttpServlet {
     private static final String C_EMPTY_DOCX  = "F0F0F0";
     private static final String C_WHITE_DOCX  = "FFFFFF";
 
-    
     @SuppressWarnings("unchecked")
     private void doExportDocx(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
@@ -658,6 +657,7 @@ public class FrontController extends HttpServlet {
         generateAffectationDocxToStream(resp.getOutputStream(), lastFilieres);
     }
 
+    
     private void generateAffectationDocxToStream(java.io.OutputStream os, List<String> lastFilieres) throws IOException {
         List<Affectation> all = service.getAllAffectationsWithDetails();
 

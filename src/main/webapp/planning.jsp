@@ -197,7 +197,7 @@
                 <form action="addSalle.do" method="post" class="mb-4">
                     <label class="form-label small fw-semibold text-muted">Ajouter une nouvelle salle</label>
                     <div class="input-group">
-                        <input type="text" class="form-control form-control-sm" name="numSalle" placeholder="Ex: S12A" required>
+                        <input type="text" class="form-control form-control-sm" name="numSalle" placeholder="" required>
                         <button class="btn btn-outline-success btn-sm" type="submit"><i class="fa-solid fa-plus"></i></button>
                     </div>
                 </form>

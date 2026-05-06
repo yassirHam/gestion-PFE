@@ -91,6 +91,16 @@ public class PfeServiceImpl implements PfeService {
     public void restoreAffectation(java.io.File backupFile) throws java.io.IOException {
         affDao.deleteAll();
         
+        java.util.List<Etudiant> allEtu = etuDao.findAll();
+        java.util.Map<Long, Etudiant> etuMap = new java.util.HashMap<>();
+        for (Etudiant e : allEtu) etuMap.put(e.getIde(), e);
+        
+        java.util.List<Professeur> allProf = profDao.findAll();
+        java.util.Map<Long, Professeur> profMap = new java.util.HashMap<>();
+        for (Professeur p : allProf) profMap.put(p.getIdp(), p);
+        
+        java.util.List<Affectation> toSave = new java.util.ArrayList<>();
+        
         java.util.List<String> lines = java.nio.file.Files.readAllLines(backupFile.toPath());
         for (String line : lines) {
             String[] parts = line.split(",");
@@ -99,19 +109,22 @@ public class PfeServiceImpl implements PfeService {
                     Long ide = Long.parseLong(parts[0]);
                     Long idp = Long.parseLong(parts[1]);
                     
-                    Etudiant etu = etuDao.findById(ide);
-                    Professeur prof = profDao.findById(idp);
+                    Etudiant etu = etuMap.get(ide);
+                    Professeur prof = profMap.get(idp);
                     
                     if (etu != null && prof != null) {
                         Affectation a = new Affectation();
                         a.setEtudiant(etu);
                         a.setEncadrant(prof);
-                        affDao.save(a);
+                        toSave.add(a);
                     }
                 } catch (Exception e) {
                     // Ignore corrupted line
                 }
             }
+        }
+        if (!toSave.isEmpty()) {
+            affDao.saveAll(toSave);
         }
     }
 

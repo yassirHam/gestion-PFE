@@ -425,6 +425,7 @@ public class FrontController extends HttpServlet {
         
         String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
         String pdfName = "Affectation_" + timestamp + ".pdf";
+        String docxName = "Affectation_" + timestamp + ".docx";
         String txtName = "Affectation_" + timestamp + ".txt";
         
         try (java.io.FileOutputStream pdfOut = new java.io.FileOutputStream(new java.io.File(historyDir, pdfName));

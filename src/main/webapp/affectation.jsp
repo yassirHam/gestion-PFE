@@ -95,6 +95,7 @@
                                             <th>C — Col 3</th>
                                             <th>D — Col 4</th>
                                             <th>E — Col 5</th>
+                                            <th>F — Col 6</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -104,6 +105,7 @@
                                             <td><span class="badge bg-secondary">PRÉNOM</span></td>
                                             <td><span class="badge bg-secondary">EMAIL</span></td>
                                             <td><span class="badge bg-secondary">CNE BINÔME</span></td>
+                                            <td><span class="badge bg-info text-dark">SUJET PFE</span></td>
                                         </tr>
                                         <tr class="text-muted fst-italic">
                                             <td>R140025687</td>
@@ -111,6 +113,7 @@
                                             <td>Hamza</td>
                                             <td>h.benali@etu.ma</td>
                                             <td>R140025688</td>
+                                            <td>Building a web app</td>
                                         </tr>
                                         <tr class="text-muted fst-italic">
                                             <td>R140025688</td>
@@ -118,6 +121,7 @@
                                             <td>Sara</td>
                                             <td>s.elouali@etu.ma</td>
                                             <td>R140025687</td>
+                                            <td>Building a web app</td>
                                         </tr>
                                         <tr class="text-muted fst-italic">
                                             <td>R123456789</td>
@@ -125,6 +129,7 @@
                                             <td>Han</td>
                                             <td>h.solo@etu.ma</td>
                                             <td><em>(vide)</em></td>
+                                            <td>Création d'un Chatbot IA</td>
                                         </tr>
                                     </tbody>
                                 </table>

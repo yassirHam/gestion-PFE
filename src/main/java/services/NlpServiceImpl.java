@@ -85,8 +85,8 @@ public class NlpServiceImpl implements NlpService {
                 "Réponds uniquement avec le JSON.";
 
         try {
-            // Petite pause pour éviter de marteler l'API (Rate Limit 429)
-            Thread.sleep(300);
+            // Pause plus longue (1.5 sec) pour respecter strictement les limites gratuites de NVIDIA NIM (Rate Limit 429)
+            Thread.sleep(1500);
             
             String response = model.generate(prompt);
             SujetAnalysis result = parseResponse(response, specialitesDispos);

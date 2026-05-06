@@ -827,6 +827,7 @@ public class FrontController extends HttpServlet {
     private DeviceRgb getSalleColorPdf(String salle) {
         return COLOR_EMPTY;
     }
+    
 
     private String getDateColorDocx(java.util.Date d) {
         if (d == null) return C_EMPTY_DOCX;

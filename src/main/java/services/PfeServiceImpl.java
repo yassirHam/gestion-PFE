@@ -326,7 +326,7 @@ public class PfeServiceImpl implements PfeService {
         query = query.toLowerCase().trim();
 
         List<Affectation> allAff = affDao.findAllWithDetails();
-        List<Soutenance> allSout = soutDao.findAll();
+        List<Soutenance> allSout = planningService.getAllSoutenances();
 
         // Chercher un étudiant en premier
         for (Affectation a : allAff) {
@@ -338,7 +338,7 @@ public class PfeServiceImpl implements PfeService {
                 result.put("affectation", a);
                 // Trouver la soutenance
                 for (Soutenance s : allSout) {
-                    if (s.getAffectation() != null && s.getAffectation().getIda().equals(a.getIda())) {
+                    if (s.getEtudiant() != null && s.getEtudiant().getIde().equals(e.getIde())) {
                         result.put("soutenance", s);
                         break;
                     }
@@ -365,8 +365,18 @@ public class PfeServiceImpl implements PfeService {
                 
                 List<Soutenance> soutenances = new java.util.ArrayList<>();
                 for (Soutenance s : allSout) {
-                    if (s.getAffectation() == null) continue;
-                    boolean isEnc = s.getAffectation().getEncadrant() != null && s.getAffectation().getEncadrant().getIdp().equals(p.getIdp());
+                    if (s.getEtudiant() == null) continue;
+                    
+                    // Trouver l'encadrant via les affectations
+                    boolean isEnc = false;
+                    for(Affectation a : allAff) {
+                        if (a.getEtudiant().getIde().equals(s.getEtudiant().getIde()) && 
+                            a.getEncadrant() != null && a.getEncadrant().getIdp().equals(p.getIdp())) {
+                            isEnc = true;
+                            break;
+                        }
+                    }
+
                     boolean isJury = false;
                     if (s.getJury() != null) {
                         isJury = (s.getJury().getPresident() != null && s.getJury().getPresident().getIdp().equals(p.getIdp())) ||

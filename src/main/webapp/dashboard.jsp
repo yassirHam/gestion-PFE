@@ -118,7 +118,7 @@
                             <c:if test="${not empty searchResult.soutenance}">
                                 <li class="list-group-item list-group-item-success">
                                     <strong><i class="fa-solid fa-calendar-check text-success me-1"></i> Soutenance planifiée :</strong> 
-                                    Le ${searchResult.soutenance.dateSoutenance.replace('-', '/')} à ${searchResult.soutenance.heureSoutenance} — Salle : ${searchResult.soutenance.salle.num_salle}
+                                    Le ${searchResult.soutenance.date} à ${searchResult.soutenance.heure} — Salle : ${searchResult.soutenance.salle.num_salle}
                                 </li>
                             </c:if>
                             <c:if test="${empty searchResult.soutenance}">
@@ -151,7 +151,7 @@
                                         <ul class="list-group list-group-flush small">
                                             <c:forEach var="sout" items="${searchResult.soutenances}">
                                                 <li class="list-group-item">
-                                                    <strong>${sout.dateSoutenance.replace('-', '/')} à ${sout.heureSoutenance}</strong> (Salle ${sout.salle.num_salle})
+                                                    <strong>${sout.date} à ${sout.heure}</strong> (Salle ${sout.salle.num_salle})
                                                     <br><span class="text-muted">Étudiant: ${sout.etudiant.nomE} ${sout.etudiant.prenomE}</span>
                                                 </li>
                                             </c:forEach>

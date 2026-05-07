@@ -1,6 +1,8 @@
 package controller;
 
 import com.itextpdf.io.font.constants.StandardFonts;
+import com.itextpdf.io.image.ImageData;
+import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.kernel.colors.ColorConstants;
 import com.itextpdf.kernel.colors.DeviceRgb;
 import com.itextpdf.kernel.font.PdfFont;
@@ -9,6 +11,7 @@ import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfWriter;
 import com.itextpdf.layout.element.Cell;
+import com.itextpdf.layout.element.Image;
 import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.element.Table;
 import com.itextpdf.layout.properties.UnitValue;
@@ -40,6 +43,8 @@ import javax.servlet.http.Part;
 
 import util.ExcelImporter;
 
+import org.apache.poi.openxml4j.exceptions.InvalidFormatException;
+import org.apache.poi.util.Units;
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
 import org.apache.poi.xwpf.usermodel.UnderlinePatterns;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -49,7 +54,9 @@ import org.apache.poi.xwpf.usermodel.XWPFTable;
 import org.apache.poi.xwpf.usermodel.XWPFTableCell;
 import org.apache.poi.xwpf.usermodel.XWPFTableRow;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
+import org.apache.xmlbeans.XmlCursor;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
@@ -79,6 +86,75 @@ import java.util.zip.ZipOutputStream;
 public class FrontController extends HttpServlet {
 
     private services.PfeService service = new services.PfeServiceImpl();
+    private static final String LOGO_FILE_NAME = "t1.png";
+    private static final String LOGO_WEB_PATH = "/assets/" + LOGO_FILE_NAME;
+
+    private byte[] readLogoBytes() throws IOException {
+        if (getServletContext() != null) {
+            try (InputStream is = getServletContext().getResourceAsStream(LOGO_WEB_PATH)) {
+                if (is != null) return is.readAllBytes();
+            }
+        }
+
+        try (InputStream is = FrontController.class.getClassLoader().getResourceAsStream(LOGO_FILE_NAME)) {
+            if (is != null) return is.readAllBytes();
+        }
+
+        String[] candidates = {
+                LOGO_FILE_NAME,
+                "projet/src/main/webapp/assets/" + LOGO_FILE_NAME,
+                "src/main/webapp/assets/" + LOGO_FILE_NAME
+        };
+        for (String candidate : candidates) {
+            java.io.File file = new java.io.File(candidate);
+            if (file.exists() && file.isFile()) {
+                return java.nio.file.Files.readAllBytes(file.toPath());
+            }
+        }
+        return null;
+    }
+
+    private void addPdfLogo(com.itextpdf.layout.Document doc) throws IOException {
+        byte[] logoBytes = readLogoBytes();
+        if (logoBytes == null) return;
+
+        ImageData imageData = ImageDataFactory.create(logoBytes);
+        Image logo = new Image(imageData)
+                .scaleToFit(70, 70)
+                .setHorizontalAlignment(com.itextpdf.layout.properties.HorizontalAlignment.CENTER)
+                .setMarginBottom(4);
+        doc.add(logo);
+    }
+
+    private void addDocxLogo(XWPFDocument doc) throws IOException {
+        byte[] logoBytes = readLogoBytes();
+        if (logoBytes == null) return;
+
+        XWPFParagraph paragraph = createTopParagraph(doc);
+        paragraph.setAlignment(ParagraphAlignment.CENTER);
+        XWPFRun run = paragraph.createRun();
+        try (ByteArrayInputStream logoStream = new ByteArrayInputStream(logoBytes)) {
+            run.addPicture(logoStream,
+                    org.apache.poi.xwpf.usermodel.Document.PICTURE_TYPE_PNG,
+                    LOGO_FILE_NAME,
+                    Units.toEMU(70),
+                    Units.toEMU(70));
+        } catch (InvalidFormatException e) {
+            throw new IOException("Impossible d'ajouter le logo ENSAH au document Word.", e);
+        }
+    }
+
+    private XWPFParagraph createTopParagraph(XWPFDocument doc) {
+        if (!doc.getParagraphs().isEmpty()) {
+            XmlCursor cursor = doc.getParagraphArray(0).getCTP().newCursor();
+            try {
+                return doc.insertNewParagraph(cursor);
+            } finally {
+                cursor.dispose();
+            }
+        }
+        return doc.createParagraph();
+    }
 
     public static class PvItem {
         private String id;
@@ -160,6 +236,9 @@ public class FrontController extends HttpServlet {
                 break;
             case "/planningPdf.do":
                 doPlanningPdf(req, resp);
+                break;
+            case "/planningJurySujetPdf.do":
+                doPlanningJurySujetPdf(req, resp);
                 break;
             case "/planningDocx.do":
                 doPlanningDocx(req, resp);
@@ -553,6 +632,8 @@ public class FrontController extends HttpServlet {
         PdfFont bold   = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD);
         PdfFont normal = PdfFontFactory.createFont(StandardFonts.HELVETICA);
 
+        addPdfLogo(doc);
+
         doc.add(new Paragraph("École Nationale des Sciences Appliquées – Al Hoceima")
                 .setFont(bold).setFontSize(13).setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
         doc.add(new Paragraph("Département Mathématiques et Informatique")
@@ -739,6 +820,8 @@ public class FrontController extends HttpServlet {
             pgSz.setW(BigInteger.valueOf(16838)); 
             pgSz.setH(BigInteger.valueOf(11906)); 
             pgSz.setOrient(STPageOrientation.LANDSCAPE);
+
+            addDocxLogo(doc);
 
             center(doc, "École Nationale des Sciences Appliquées – Al Hoceima", 14, true);
             center(doc, "Département Mathématiques et Informatique", 12, false);
@@ -1130,6 +1213,89 @@ public class FrontController extends HttpServlet {
         generatePdfToStream(resp.getOutputStream());
     }
 
+    private void doPlanningJurySujetPdf(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+        resp.setContentType("application/pdf");
+        resp.setHeader("Content-Disposition", "attachment; filename=jury_sujet_soutenances.pdf");
+        generateJurySujetPdfToStream(resp.getOutputStream());
+    }
+
+    private void generateJurySujetPdfToStream(java.io.OutputStream os) throws IOException {
+        List<Soutenance> soutenances = service.getAllSoutenances();
+        Map<Long, String> colorMap = service.getProfessorColors();
+
+        PdfWriter writer = new PdfWriter(os);
+        PdfDocument pdf = new PdfDocument(writer);
+        pdf.setDefaultPageSize(PageSize.A4.rotate());
+        com.itextpdf.layout.Document doc = new com.itextpdf.layout.Document(pdf);
+        doc.setMargins(20, 20, 20, 20);
+
+        PdfFont bold = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD);
+        PdfFont normal = PdfFontFactory.createFont(StandardFonts.HELVETICA);
+
+        addPdfLogo(doc);
+        doc.add(new Paragraph("École Nationale des Sciences Appliquées – Al Hoceima")
+                .setFont(bold).setFontSize(12)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
+        doc.add(new Paragraph("Département Mathématiques et Informatique")
+                .setFont(normal).setFontSize(10)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
+        doc.add(new Paragraph("Jury + Sujet - Visualisation de l'affectation intelligente")
+                .setFont(bold).setFontSize(11)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
+        doc.add(new Paragraph("Année Universitaire 2025/2026")
+                .setFont(normal).setFontSize(9)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setMarginBottom(8));
+
+        float[] cols = {3f, 13f, 13f, 13f, 16f, 28f, 18f};
+        Table table = new Table(UnitValue.createPercentArray(cols)).useAllAvailableWidth();
+        String[] headers = {"ID", "Encadrant", "Membre de jury 1", "Membre de jury 2",
+                "Etudiant(s)", "Sujet stage", "Spécialités profs"};
+        for (String h : headers) {
+            table.addHeaderCell(new Cell()
+                    .add(new Paragraph(h).setFont(bold).setFontSize(8).setFontColor(ColorConstants.WHITE))
+                    .setBackgroundColor(COLOR_HEADER)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    .setVerticalAlignment(VerticalAlignment.MIDDLE)
+                    .setPadding(3));
+        }
+
+        int id = 1;
+        Map<String, List<Soutenance>> groups = new LinkedHashMap<>();
+        for (Soutenance s : soutenances) {
+            String key = s.getJury().getIdJury() + "_" + s.getDate() + "_" + s.getHeure() + "_" + s.getSalle().getId_salle();
+            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(s);
+        }
+
+        DeviceRgb subjectColor = new DeviceRgb(245, 247, 250);
+        DeviceRgb specialityColor = new DeviceRgb(235, 248, 255);
+        for (List<Soutenance> group : groups.values()) {
+            Soutenance s = group.get(0);
+            Professeur enc = s.getJury().getPresident();
+            Professeur m1 = s.getJury().getRapporteur1();
+            Professeur m2 = s.getJury().getRapporteur2();
+            boolean isBinome = group.size() > 1;
+            String filiere = s.getEtudiant() != null ? s.getEtudiant().getFiliere() : "";
+
+            DeviceRgb encColor = hexToRgb(colorMap.getOrDefault(enc.getIdp(), "1A56DB"));
+            DeviceRgb m1Color = hexToRgb(colorMap.getOrDefault(m1.getIdp(), "2ECC71"));
+            DeviceRgb m2Color = hexToRgb(colorMap.getOrDefault(m2.getIdp(), "E67E22"));
+            DeviceRgb filColor = filiereColorPdf(filiere);
+
+            table.addCell(planCell(String.valueOf(id++), normal, 8, COLOR_EMPTY, false, isBinome));
+            table.addCell(planCell(profName(enc), bold, 8, encColor, true, isBinome));
+            table.addCell(planCell(profName(m1), normal, 8, m1Color, true, isBinome));
+            table.addCell(planCell(profName(m2), normal, 8, m2Color, true, isBinome));
+            table.addCell(planCell(studentNames(group), isBinome ? bold : normal, 8, filColor, false, isBinome));
+            table.addCell(planCell(projectSubjects(group), normal, 8, subjectColor, false, isBinome));
+            table.addCell(planCell(professorSpecialites(enc, m1, m2), normal, 8, specialityColor, false, isBinome));
+        }
+
+        doc.add(table);
+        doc.close();
+    }
+
     private void generatePdfToStream(java.io.OutputStream os) throws IOException {
         List<Soutenance> soutenances = service.getAllSoutenances();
         Map<Long, String> colorMap   = service.getProfessorColors();
@@ -1144,6 +1310,7 @@ public class FrontController extends HttpServlet {
         PdfFont normal = PdfFontFactory.createFont(StandardFonts.HELVETICA);
 
         // Header
+        addPdfLogo(doc);
         doc.add(new Paragraph("École Nationale des Sciences Appliquées – Al Hoceima")
                 .setFont(bold).setFontSize(12)
                 .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
@@ -1280,6 +1447,7 @@ public class FrontController extends HttpServlet {
             pgSz.setH(BigInteger.valueOf(11906));
             pgSz.setOrient(STPageOrientation.LANDSCAPE);
 
+            addDocxLogo(doc);
             center(doc, "École Nationale des Sciences Appliquées – Al Hoceima", 14, true);
             center(doc, "Département Mathématiques et Informatique", 12, false);
             center(doc, "Planning des soutenances des Projets de Fin d'Etude", 11, true);
@@ -1517,6 +1685,7 @@ public class FrontController extends HttpServlet {
 
             try (XWPFDocument doc = new XWPFDocument(template)) {
                 Map<String, String> values = pvTemplateValues(group);
+                addDocxLogo(doc);
                 replacePlaceholders(doc, values);
                 doc.write(os);
             }
@@ -1800,6 +1969,7 @@ public class FrontController extends HttpServlet {
                 if (i == 0) filiereStr.append(e.getFiliere());
             }
 
+            addPdfLogo(doc);
             doc.add(new Paragraph("Universite Abdelmalek Essaadi | ENSA Al Hoceima")
                     .setFont(bold).setFontSize(10)
                     .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
@@ -1914,6 +2084,30 @@ public class FrontController extends HttpServlet {
         }
 
         doc.close();
+    }
+
+    private String projectSubjects(List<Soutenance> group) {
+        Set<String> subjects = new LinkedHashSet<>();
+        for (Soutenance soutenance : group) {
+            if (soutenance.getEtudiant() != null) {
+                String subject = safe(soutenance.getEtudiant().getSujet_stage());
+                if (!subject.isEmpty()) subjects.add(subject);
+            }
+        }
+        return subjects.isEmpty() ? "-" : String.join(" / ", subjects);
+    }
+
+    private String professorSpecialites(Professeur... professeurs) {
+        Set<String> specialites = new LinkedHashSet<>();
+        for (Professeur professeur : professeurs) {
+            if (professeur == null) continue;
+            String specialite = safe(professeur.getSpecialite());
+            if (specialite.isEmpty()) {
+                specialite = safe(professeur.getDiscipline());
+            }
+            if (!specialite.isEmpty()) specialites.add(specialite);
+        }
+        return specialites.isEmpty() ? "-" : String.join(" + ", specialites);
     }
 
     private String profName(Professeur professeur) {

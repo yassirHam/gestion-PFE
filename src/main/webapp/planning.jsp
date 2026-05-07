@@ -128,6 +128,11 @@
                                     <i class="fa-solid fa-file-pdf me-2"></i>Télécharger le PDF Actuel
                                 </button>
                             </form>
+                            <form action="planningJurySujetPdf.do" method="post">
+                                <button type="submit" class="btn btn-outline-danger px-4 py-2">
+                                    <i class="fa-solid fa-brain me-2"></i>Jury + Sujet
+                                </button>
+                            </form>
                             <form action="planningDocx.do" method="post">
                                 <button type="submit" class="btn btn-outline-primary px-4 py-2">
                                     <i class="fa-solid fa-file-word me-2"></i>Télécharger le Word Actuel

@@ -1685,7 +1685,6 @@ public class FrontController extends HttpServlet {
 
             try (XWPFDocument doc = new XWPFDocument(template)) {
                 Map<String, String> values = pvTemplateValues(group);
-                addDocxLogo(doc);
                 replacePlaceholders(doc, values);
                 doc.write(os);
             }
@@ -1969,7 +1968,6 @@ public class FrontController extends HttpServlet {
                 if (i == 0) filiereStr.append(e.getFiliere());
             }
 
-            addPdfLogo(doc);
             doc.add(new Paragraph("Universite Abdelmalek Essaadi | ENSA Al Hoceima")
                     .setFont(bold).setFontSize(10)
                     .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)

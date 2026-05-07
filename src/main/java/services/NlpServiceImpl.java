@@ -24,14 +24,20 @@ public class NlpServiceImpl implements NlpService {
 
     // ── Cache statique pour éviter de réinterroger l'API pour les mêmes sujets ──
     private static final Map<String, SujetAnalysis> CACHE = new ConcurrentHashMap<>();
+    private static final Map<String, String> VERIFICATION_CACHE = new ConcurrentHashMap<>();
 
     private final ChatLanguageModel model;
+    private final boolean configured;
 
     public NlpServiceImpl() {
         java.util.Properties cfg = loadConfig();
         String apiKey  = cfg.getProperty("nvidia.api.key",  "MISSING_API_KEY");
         String baseUrl = cfg.getProperty("nvidia.base.url", "https://integrate.api.nvidia.com/v1");
         String model_  = cfg.getProperty("nvidia.model",   "meta/llama-3.3-70b-instruct");
+        this.configured = apiKey != null
+                && !apiKey.trim().isEmpty()
+                && !"MISSING_API_KEY".equals(apiKey)
+                && !"VOTRE_CLE_API_NVIDIA_ICI".equals(apiKey);
 
         this.model = OpenAiChatModel.builder()
                 .apiKey(apiKey)
@@ -253,5 +259,60 @@ public class NlpServiceImpl implements NlpService {
         }
         
         return results;
+    }
+
+    @Override
+    public String summarizeVerificationFindings(List<String> findings) {
+        if (findings == null || findings.isEmpty()) {
+            return "Aucune anomalie detectee. Les fichiers generes semblent conformes aux contraintes principales.";
+        }
+
+        String source = String.join("\n", findings);
+        String cacheKey = source.trim().toLowerCase();
+        if (VERIFICATION_CACHE.containsKey(cacheKey)) {
+            return VERIFICATION_CACHE.get(cacheKey);
+        }
+
+        if (!configured) {
+            String fallback = localVerificationSummary(findings);
+            VERIFICATION_CACHE.put(cacheKey, fallback);
+            return fallback;
+        }
+
+        String prompt = "Tu es un assistant de controle qualite pour des fichiers de soutenances PFE.\n"
+                + "A partir des constats suivants, redige une synthese courte en francais, en 2 phrases maximum.\n"
+                + "Mentionne les priorites de correction sans inventer de nouvelles anomalies.\n\n"
+                + source;
+
+        try {
+            String response = model.generate(prompt);
+            String summary = response == null ? "" : response.trim();
+            if (summary.isEmpty()) {
+                summary = localVerificationSummary(findings);
+            }
+            VERIFICATION_CACHE.put(cacheKey, summary);
+            return summary;
+        } catch (Exception e) {
+            LOG.log(Level.WARNING, "Verification NLP summary failed - Reason: " + e.getMessage());
+            String fallback = localVerificationSummary(findings);
+            VERIFICATION_CACHE.put(cacheKey, fallback);
+            return fallback;
+        }
+    }
+
+    private String localVerificationSummary(List<String> findings) {
+        boolean hasCritical = false;
+        boolean hasWarning = false;
+        for (String finding : findings) {
+            if (finding != null && finding.contains("CRITIQUE")) hasCritical = true;
+            if (finding != null && finding.contains("ALERTE")) hasWarning = true;
+        }
+        if (hasCritical) {
+            return "Des anomalies critiques ont ete detectees. Corrigez d'abord les conflits de planning ou donnees manquantes, puis relancez la verification.";
+        }
+        if (hasWarning) {
+            return "Le planning est exploitable mais certaines contraintes meritent une correction. Verifiez surtout l'equite d'encadrement et les temps de repos.";
+        }
+        return "Aucune anomalie bloquante detectee. Les fichiers generes semblent conformes aux contraintes principales.";
     }
 }

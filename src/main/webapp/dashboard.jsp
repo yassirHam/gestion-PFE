@@ -55,6 +55,11 @@
             box-shadow: 0 4px 6px rgba(0,0,0,0.04);
             margin-bottom: 24px;
         }
+
+        .issue-list {
+            max-height: 320px;
+            overflow-y: auto;
+        }
     </style>
 </head>
 <body>
@@ -218,6 +223,100 @@
                 </div>
             </div>
         </div>
+
+        <!-- Verification des fichiers generes -->
+        <c:if test="${not empty verificationError}">
+            <div class="alert alert-warning border-0 rounded-3 shadow-sm">
+                <i class="fa-solid fa-triangle-exclamation me-2"></i> ${verificationError}
+            </div>
+        </c:if>
+
+        <c:if test="${not empty verificationReport}">
+            <div class="card mb-4 shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0 fw-bold">
+                        <i class="fa-solid fa-check-double text-primary me-2"></i> Verification des fichiers generes
+                    </h5>
+                    <div>
+                        <c:choose>
+                            <c:when test="${verificationReport.compliant}">
+                                <span class="badge bg-success">Conforme</span>
+                            </c:when>
+                            <c:otherwise>
+                                <span class="badge bg-warning text-dark">A verifier</span>
+                            </c:otherwise>
+                        </c:choose>
+                    </div>
+                </div>
+
+                <div class="card-body">
+                    <p class="text-muted small mb-3">
+                        Controle automatique de la repartition des affectations et des contraintes du planning.
+                    </p>
+
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 h-100">
+                                <div class="text-muted small">Moyenne encadrement</div>
+                                <strong>${verificationReport.encadrementAverageFormatted}</strong>
+                                <div class="small text-muted">Attendu: ${verificationReport.encadrementMinExpected}-${verificationReport.encadrementMaxExpected}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 h-100">
+                                <div class="text-muted small">Anomalies critiques</div>
+                                <strong class="text-danger">${verificationReport.criticalCount}</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 h-100">
+                                <div class="text-muted small">Alertes</div>
+                                <strong class="text-warning">${verificationReport.warningCount}</strong>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="border rounded p-3 h-100">
+                                <div class="text-muted small">Planning</div>
+                                <c:choose>
+                                    <c:when test="${verificationReport.planningDataAvailable}">
+                                        <strong class="text-success">Genere</strong>
+                                    </c:when>
+                                    <c:otherwise>
+                                        <strong class="text-secondary">Non genere</strong>
+                                    </c:otherwise>
+                                </c:choose>
+                            </div>
+                        </div>
+                    </div>
+
+                    <c:if test="${verificationReport.planningDataAvailable && not empty verificationReport.nlpSummary}">
+                        <div class="alert alert-info">
+                            <strong>Synthese :</strong> ${verificationReport.nlpSummary}
+                        </div>
+                    </c:if>
+
+                    <c:choose>
+                        <c:when test="${empty verificationReport.issues}">
+                            <div class="alert alert-success mb-0">
+                                <i class="fa-solid fa-circle-check me-2"></i>
+                                Aucun chevauchement de salle, conflit professeur, repos insuffisant ou ecart d'affectation significatif detecte.
+                            </div>
+                        </c:when>
+                        <c:otherwise>
+                            <div class="issue-list list-group">
+                                <c:forEach var="issue" items="${verificationReport.issues}">
+                                    <div class="list-group-item">
+                                        <span class="badge bg-${issue.bootstrapClass} me-2">${issue.severity}</span>
+                                        <strong>${issue.category} - ${issue.title}</strong>
+                                        <div class="small text-muted mt-1">${issue.detail}</div>
+                                    </div>
+                                </c:forEach>
+                            </div>
+                        </c:otherwise>
+                    </c:choose>
+                </div>
+            </div>
+        </c:if>
 
         <!-- Charts Row 1 -->
         <div class="row">

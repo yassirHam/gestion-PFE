@@ -204,6 +204,10 @@
 
                 <form action="lancerPlanning.do" method="post" onsubmit="return confirm('Générer un nouveau planning ? L\'ancien sera écrasé.');">
                     <label class="form-label small fw-semibold text-muted">Salles à inclure</label>
+                    <div class="btn-group btn-group-sm mb-2" role="group" aria-label="Selection des salles">
+                        <button type="button" class="btn btn-outline-primary" id="selectAllSalles">Tout selectionner</button>
+                        <button type="button" class="btn btn-outline-secondary" id="unselectAllSalles">Tout deselectionner</button>
+                    </div>
                     <div class="border rounded p-3 mb-4" style="max-height: 200px; overflow-y: auto;">
                         <c:forEach var="salle" items="${salles}">
                             <div class="form-check">
@@ -235,6 +239,29 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const selectAllButton = document.getElementById('selectAllSalles');
+        const unselectAllButton = document.getElementById('unselectAllSalles');
+        const salleCheckboxes = document.querySelectorAll('input[name="selectedSalles"]');
+
+        if (selectAllButton) {
+            selectAllButton.addEventListener('click', function () {
+                salleCheckboxes.forEach(function (checkbox) {
+                    checkbox.checked = true;
+                });
+            });
+        }
+
+        if (unselectAllButton) {
+            unselectAllButton.addEventListener('click', function () {
+                salleCheckboxes.forEach(function (checkbox) {
+                    checkbox.checked = false;
+                });
+            });
+        }
+    });
+</script>
 
 </body>
 </html>

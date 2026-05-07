@@ -317,6 +317,12 @@ public class PfeServiceImpl implements PfeService {
     }
 
     @Override
+    public VerificationReport verifierFichiersGeneres(List<String> filieresFiltre) {
+        VerificationService verificationService = new VerificationServiceImpl();
+        return verificationService.verifyGeneratedFiles(filieresFiltre);
+    }
+
+    @Override
     public java.util.Map<String, Object> searchDashboard(String query) {
         java.util.Map<String, Object> result = new java.util.HashMap<>();
         if (query == null || query.trim().isEmpty()) {

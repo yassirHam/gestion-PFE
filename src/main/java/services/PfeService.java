@@ -40,6 +40,7 @@ public interface PfeService {
     // New Dashboard stats for Soutenances
     Map<String, Integer> getSoutenancesParProf(List<String> filieresFiltre);
     int getTotalSoutenances(List<String> filieresFiltre);
+    VerificationReport verifierFichiersGeneres(List<String> filieresFiltre);
 
     // Search operations
     Map<String, Object> searchDashboard(String query);

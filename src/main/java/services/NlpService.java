@@ -23,4 +23,11 @@ public interface NlpService {
      * @return Map associant chaque sujet à son analyse
      */
     java.util.Map<String, SujetAnalysis> analyzeSujetsBatch(List<String> sujets, List<String> specialitesDispos);
+
+    /**
+     * Resume les anomalies detectees par le verificateur des fichiers generes.
+     * Le retour reste optionnel: en cas d'indisponibilite API, l'implementation
+     * doit fournir une synthese locale courte.
+     */
+    String summarizeVerificationFindings(List<String> findings);
 }

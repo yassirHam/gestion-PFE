@@ -166,6 +166,12 @@ public class FrontController extends HttpServlet {
         req.setAttribute("totalEtudiants", totalEtudiants);
         req.setAttribute("totalProfs", totalProfs);
         req.setAttribute("totalSoutenances", totalSoutenances);
+        try {
+            services.VerificationReport verificationReport = service.verifierFichiersGeneres(lastFilieres);
+            req.setAttribute("verificationReport", verificationReport);
+        } catch (Exception e) {
+            req.setAttribute("verificationError", "Verification indisponible pour le moment : " + e.getMessage());
+        }
         
         StringBuilder labelsProf = new StringBuilder("[");
         StringBuilder dataProf = new StringBuilder("[");
@@ -1306,4 +1312,3 @@ public class FrontController extends HttpServlet {
         }
     }
 }
-

@@ -53,5 +53,5 @@ public interface PfeService {
 
     // Salles operations
     List<entities.Salle> getAllSalles();
-    void addSalle(String numSalle);
+    boolean addSalle(String numSalle);
 }

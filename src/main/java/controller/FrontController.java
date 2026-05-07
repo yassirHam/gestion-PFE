@@ -185,6 +185,7 @@ public class FrontController extends HttpServlet {
         }
     }
 
+    
     @SuppressWarnings("unchecked")
     private void doDashboard(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         String query = req.getParameter("q");
@@ -1050,7 +1051,11 @@ public class FrontController extends HttpServlet {
             throws ServletException, IOException {
         String numSalle = req.getParameter("numSalle");
         if (numSalle != null && !numSalle.trim().isEmpty()) {
-            service.addSalle(numSalle.trim());
+            boolean added = service.addSalle(numSalle.trim());
+            if (!added) {
+                resp.sendRedirect("planning.do?salleExists=true");
+                return;
+            }
         }
         resp.sendRedirect("planning.do");
     }

@@ -441,12 +441,34 @@ public class PfeServiceImpl implements PfeService {
     }
 
     @Override
-    public void addSalle(String numSalle) {
+    public boolean addSalle(String numSalle) {
         dao.SalleDAO salleDao = new dao.SalleDAOImpl();
+        String normalizedNumSalle = normalizeSalleName(numSalle);
+        if (normalizedNumSalle.isEmpty()) {
+            return false;
+        }
+
+        for (entities.Salle existingSalle : salleDao.findAll()) {
+            if (normalizeSalleName(existingSalle.getNum_salle()).equals(normalizedNumSalle)) {
+                return false;
+            }
+        }
+
         entities.Salle s = new entities.Salle();
-        s.setNum_salle(numSalle);
+        s.setNum_salle(numSalle.trim());
         s.setBlock("Bloc Principal");
         s.setStatus("Libre");
         salleDao.save(s);
+        return true;
+    }
+
+    private String normalizeSalleName(String numSalle) {
+        if (numSalle == null) {
+            return "";
+        }
+        String normalized = numSalle.trim().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
+        normalized = normalized.replaceFirst("^SALLE\\s*", "S");
+        normalized = normalized.replaceFirst("^S\\s+(\\d)", "S$1");
+        return normalized;
     }
 }

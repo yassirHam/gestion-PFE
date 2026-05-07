@@ -191,6 +191,14 @@
             <!-- Configuration & Génération -->
             <div class="card p-4 sticky-top" style="top: 20px;">
                 <h5 class="fw-bold mb-3"> Configuration</h5>
+
+                <c:if test="${param.salleExists == 'true'}">
+                    <div class="alert alert-warning alert-dismissible fade show small" role="alert">
+                        <i class="fa-solid fa-triangle-exclamation me-1"></i>
+                        Cette salle existe deja.
+                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fermer"></button>
+                    </div>
+                </c:if>
                 
                 <c:if test="${not hasAffectations}">
                     <div class="alert alert-warning small">

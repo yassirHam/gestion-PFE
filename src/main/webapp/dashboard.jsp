@@ -82,6 +82,9 @@
                     <a class="nav-link" href="planning.do"><i class="fa-solid fa-calendar-days me-1"></i> Planning</a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link" href="pv.do"><i class="fa-solid fa-file-lines me-1"></i> PVs</a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link active" href="dashboard.do"><i class="fa-solid fa-chart-pie me-1"></i> Dashboard</a>
                 </li>
             </ul>

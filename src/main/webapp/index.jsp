@@ -34,7 +34,7 @@
         </div>
 
         <div class="col-md-3">
-            <form action="pvs.do" method="get">
+            <form action="pv.do" method="get">
                 <button class="btn btn-warning w-100 p-3">
                     PVs
                 </button>

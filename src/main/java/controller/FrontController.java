@@ -41,6 +41,7 @@ import javax.servlet.http.Part;
 import util.ExcelImporter;
 
 import org.apache.poi.xwpf.usermodel.ParagraphAlignment;
+import org.apache.poi.xwpf.usermodel.UnderlinePatterns;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.apache.poi.xwpf.usermodel.XWPFRun;
@@ -50,7 +51,11 @@ import org.apache.poi.xwpf.usermodel.XWPFTableRow;
 import org.openxmlformats.schemas.wordprocessingml.x2006.main.*;
 
 import java.io.IOException;
+import java.io.ByteArrayOutputStream;
+import java.io.InputStream;
 import java.math.BigInteger;
+import java.net.URLEncoder;
+import java.text.Normalizer;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -58,16 +63,44 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Random;
+import java.util.Set;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 @WebServlet("*.do")
 @MultipartConfig(maxFileSize = 10485760) // 10MB
 public class FrontController extends HttpServlet {
 
     private services.PfeService service = new services.PfeServiceImpl();
+
+    public static class PvItem {
+        private String id;
+        private String professorId;
+        private String professorName;
+        private String studentName;
+        private String filiere;
+        private String date;
+        private String heure;
+        private String salle;
+        private String fileName;
+
+        public String getId() { return id; }
+        public String getProfessorId() { return professorId; }
+        public String getProfessorName() { return professorName; }
+        public String getStudentName() { return studentName; }
+        public String getFiliere() { return filiere; }
+        public String getDate() { return date; }
+        public String getHeure() { return heure; }
+        public String getSalle() { return salle; }
+        public String getFileName() { return fileName; }
+    }
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -130,6 +163,15 @@ public class FrontController extends HttpServlet {
                 break;
             case "/planningDocx.do":
                 doPlanningDocx(req, resp);
+                break;
+            case "/pv.do":
+                doPV(req, resp);
+                break;
+            case "/downloadPvDocx.do":
+                doDownloadPvDocx(req, resp);
+                break;
+            case "/downloadPvZip.do":
+                doDownloadPvZip(req, resp);
                 break;
             case "/templateEtudiants.do":
                 doTemplateEtudiants(req, resp);
@@ -836,6 +878,7 @@ public class FrontController extends HttpServlet {
         w.setType(STTblWidth.DXA);
     }
 
+    
     private void setLegendCellDocx(XWPFTableCell cell, String label, String color) {
         setCellBg(cell, color);
         cell.removeParagraph(0);
@@ -1310,5 +1353,625 @@ public class FrontController extends HttpServlet {
 
             doc.write(os);
         }
+    }
+
+    private void doPV(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+        List<Soutenance> soutenances = service.getAllSoutenances();
+        List<List<Soutenance>> pvGroups = groupSoutenancesForPv(soutenances);
+        List<PvItem> pvItems = buildPvItems(pvGroups);
+        Map<String, Map<String, Object>> professorGroups = new LinkedHashMap<>();
+
+        for (PvItem item : pvItems) {
+            Map<String, Object> group = professorGroups.get(item.getProfessorId());
+            if (group == null) {
+                group = new LinkedHashMap<>();
+                group.put("professorId", item.getProfessorId());
+                group.put("professorName", item.getProfessorName());
+                group.put("pvs", new ArrayList<PvItem>());
+                professorGroups.put(item.getProfessorId(), group);
+            }
+            @SuppressWarnings("unchecked")
+            List<PvItem> pvs = (List<PvItem>) group.get("pvs");
+            pvs.add(item);
+        }
+
+        String selectedProfessorId = req.getParameter("profId");
+        if ((selectedProfessorId == null || selectedProfessorId.trim().isEmpty()) && !professorGroups.isEmpty()) {
+            selectedProfessorId = professorGroups.keySet().iterator().next();
+        }
+
+        req.setAttribute("soutenances", soutenances);
+        req.setAttribute("totalPVs", pvItems.size());
+        req.setAttribute("pvItems", pvItems);
+        req.setAttribute("professorGroups", new ArrayList<>(professorGroups.values()));
+        req.setAttribute("selectedProfessorId", selectedProfessorId);
+        req.setAttribute("selectedProfessorGroup", selectedProfessorId != null ? professorGroups.get(selectedProfessorId) : null);
+        req.getRequestDispatcher("pv.jsp").forward(req, resp);
+    }
+
+    private void doDownloadPvDocx(HttpServletRequest req, HttpServletResponse resp)
+            throws IOException {
+        String pvId = req.getParameter("pvId");
+        List<Soutenance> group = findPvGroupById(pvId);
+        if (group == null || group.isEmpty()) {
+            resp.sendRedirect("pv.do");
+            return;
+        }
+
+        PvItem item = buildPvItem(group);
+        resp.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+        resp.setHeader("Content-Disposition", "attachment; filename=\"" + encodeDownloadFileName(item.getFileName()) + "\"");
+        generatePvDocx(resp.getOutputStream(), group);
+    }
+
+    private void doDownloadPvZip(HttpServletRequest req, HttpServletResponse resp)
+            throws IOException {
+        String professorId = req.getParameter("profId");
+        List<List<Soutenance>> groups = groupSoutenancesForPv(service.getAllSoutenances());
+        if (professorId != null && !professorId.trim().isEmpty()) {
+            List<List<Soutenance>> filtered = new ArrayList<>();
+            for (List<Soutenance> group : groups) {
+                Soutenance first = group.get(0);
+                if (first.getJury() != null
+                        && first.getJury().getPresident() != null
+                        && professorId.equals(String.valueOf(first.getJury().getPresident().getIdp()))) {
+                    filtered.add(group);
+                }
+            }
+            groups = filtered;
+        }
+
+        if (groups.isEmpty()) {
+            resp.sendRedirect("pv.do");
+            return;
+        }
+
+        String zipName = professorId == null || professorId.trim().isEmpty()
+                ? "PVs_Soutenances.zip"
+                : "PVs_Professeur_" + professorId + ".zip";
+        resp.setContentType("application/zip");
+        resp.setHeader("Content-Disposition", "attachment; filename=\"" + encodeDownloadFileName(zipName) + "\"");
+
+        Set<String> usedNames = new HashSet<>();
+        Set<String> createdFolders = new HashSet<>();
+        try (ZipOutputStream zip = new ZipOutputStream(resp.getOutputStream())) {
+            for (List<Soutenance> group : groups) {
+                PvItem item = buildPvItem(group);
+                String folderName = pvProfessorFolderName(group) + "/";
+                if (createdFolders.add(folderName)) {
+                    zip.putNextEntry(new ZipEntry(folderName));
+                    zip.closeEntry();
+                }
+
+                String entryName = uniqueZipName(folderName + item.getFileName(), usedNames);
+                zip.putNextEntry(new ZipEntry(entryName));
+                ByteArrayOutputStream docx = new ByteArrayOutputStream();
+                generatePvDocx(docx, group);
+                zip.write(docx.toByteArray());
+                zip.closeEntry();
+            }
+        }
+    }
+
+    private List<List<Soutenance>> groupSoutenancesForPv(List<Soutenance> soutenances) {
+        Map<String, List<Soutenance>> groups = new LinkedHashMap<>();
+        for (Soutenance s : soutenances) {
+            if (s == null || s.getJury() == null || s.getDate() == null || s.getSalle() == null) continue;
+            groups.computeIfAbsent(pvGroupKey(s), k -> new ArrayList<>()).add(s);
+        }
+        return new ArrayList<>(groups.values());
+    }
+
+    private List<Soutenance> findPvGroupById(String pvId) {
+        if (pvId == null || pvId.trim().isEmpty()) return null;
+        for (List<Soutenance> group : groupSoutenancesForPv(service.getAllSoutenances())) {
+            if (!group.isEmpty() && pvId.equals(pvGroupKey(group.get(0)))) {
+                return group;
+            }
+        }
+        return null;
+    }
+
+    private String pvGroupKey(Soutenance s) {
+        return s.getJury().getIdJury() + "_" + s.getDate().getTime() + "_" + s.getHeure() + "_" + s.getSalle().getId_salle();
+    }
+
+    private List<PvItem> buildPvItems(List<List<Soutenance>> groups) {
+        List<PvItem> items = new ArrayList<>();
+        for (List<Soutenance> group : groups) {
+            if (!group.isEmpty()) items.add(buildPvItem(group));
+        }
+        return items;
+    }
+
+    private PvItem buildPvItem(List<Soutenance> group) {
+        Soutenance first = group.get(0);
+        Professeur professor = first.getJury().getPresident();
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
+
+        PvItem item = new PvItem();
+        item.id = pvGroupKey(first);
+        item.professorId = professor != null && professor.getIdp() != null ? String.valueOf(professor.getIdp()) : "0";
+        item.professorName = profName(professor);
+        item.studentName = studentNames(group);
+        item.filiere = first.getEtudiant() != null ? first.getEtudiant().getFiliere() : "";
+        item.date = first.getDate() != null ? sdf.format(first.getDate()) : "";
+        item.heure = first.getHeure();
+        item.salle = first.getSalle() != null ? first.getSalle().getNum_salle() : "";
+        item.fileName = pvFileName(group);
+        return item;
+    }
+
+    private void generatePvDocx(java.io.OutputStream os, List<Soutenance> group)
+            throws IOException {
+        try (InputStream template = FrontController.class.getClassLoader().getResourceAsStream("templates/template_pv.docx")) {
+            if (template == null) {
+                throw new IOException("Template PV introuvable: templates/template_pv.docx");
+            }
+
+            try (XWPFDocument doc = new XWPFDocument(template)) {
+                Map<String, String> values = pvTemplateValues(group);
+                replacePlaceholders(doc, values);
+                doc.write(os);
+            }
+        }
+    }
+
+    private Map<String, String> pvTemplateValues(List<Soutenance> group) {
+        Soutenance s = group.get(0);
+        Etudiant e = s.getEtudiant();
+        Professeur encadrant = s.getJury().getPresident();
+        Professeur jury1 = s.getJury().getRapporteur1();
+        Professeur jury2 = s.getJury().getRapporteur2();
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
+
+        Map<String, String> values = new HashMap<>();
+        String filiere = e != null ? safe(e.getFiliere()) : "";
+        values.put("annee_univ", "2025/2026");
+        values.put("nom_etudiant", studentNames(group));
+        values.putAll(pvFiliereBoxes(filiere));
+        values.put("intitule_rapport", e != null ? safe(e.getSujet_stage()) : "");
+        values.put("nom_encadrant", profName(encadrant));
+        values.put("nom_jury", profName(jury1));
+        values.put("jury_role", "Examinateur\nPr.       " + profName(jury2)
+                + "\tExaminateur");
+        values.put("date_soutenance", s.getDate() != null ? sdf.format(s.getDate()) : "");
+        values.put("signature1", profName(encadrant));
+        values.put("signature2", profName(jury1));
+        values.put("signature3", profName(jury2));
+        return values;
+    }
+
+    private void replacePlaceholders(XWPFDocument doc, Map<String, String> values) {
+        for (XWPFParagraph paragraph : doc.getParagraphs()) {
+            replaceInParagraph(paragraph, values);
+        }
+        for (XWPFTable table : doc.getTables()) {
+            replaceInTable(table, values);
+        }
+        for (org.apache.poi.xwpf.usermodel.XWPFHeader header : doc.getHeaderList()) {
+            for (XWPFParagraph paragraph : header.getParagraphs()) {
+                replaceInParagraph(paragraph, values);
+            }
+            for (XWPFTable table : header.getTables()) {
+                replaceInTable(table, values);
+            }
+        }
+    }
+
+    private void replaceInTable(XWPFTable table, Map<String, String> values) {
+        for (XWPFTableRow row : table.getRows()) {
+            for (XWPFTableCell cell : row.getTableCells()) {
+                for (XWPFParagraph paragraph : cell.getParagraphs()) {
+                    replaceInParagraph(paragraph, values);
+                }
+                for (XWPFTable nested : cell.getTables()) {
+                    replaceInTable(nested, values);
+                }
+            }
+        }
+    }
+
+    private void replaceInParagraph(XWPFParagraph paragraph, Map<String, String> values) {
+        String text = paragraph.getText();
+        if (text == null || !text.contains("${")) return;
+
+        String replaced = replaceTemplateText(text, values);
+        if (replaced.equals(text)) return;
+
+        boolean universityYearLine = replaced.contains("Année Universitaire")
+                || replaced.contains("Annee Universitaire");
+        if (universityYearLine) {
+            replaced = replaced.replace('\u00A0', ' ').trim();
+            paragraph.setAlignment(ParagraphAlignment.CENTER);
+        }
+        boolean juryRoleLine = replaced.contains("Président")
+                || replaced.contains("President")
+                || replaced.contains("Examinateur");
+        if (juryRoleLine) {
+            replaced = alignJuryRoleText(replaced);
+            setJuryRoleTabStop(paragraph);
+        }
+
+        int runs = paragraph.getRuns().size();
+        for (int i = runs - 1; i >= 0; i--) {
+            paragraph.removeRun(i);
+        }
+        XWPFRun run = paragraph.createRun();
+        if (universityYearLine) {
+            run.setUnderline(UnderlinePatterns.NONE);
+        }
+        String[] lines = replaced.split("\\n", -1);
+        for (int i = 0; i < lines.length; i++) {
+            if (i > 0) run.addBreak();
+            addRunTextWithTabs(run, lines[i]);
+        }
+    }
+
+    private String alignJuryRoleText(String text) {
+        return text.replaceAll("[ \\u00A0]{10,}(Président|President|Examinateur)", "\t$1");
+    }
+
+    private void setJuryRoleTabStop(XWPFParagraph paragraph) {
+        CTPPr pPr = paragraph.getCTP().isSetPPr()
+                ? paragraph.getCTP().getPPr()
+                : paragraph.getCTP().addNewPPr();
+        if (pPr.isSetTabs()) {
+            pPr.unsetTabs();
+        }
+        CTTabStop tab = pPr.addNewTabs().addNewTab();
+        tab.setVal(STTabJc.LEFT);
+        tab.setPos(BigInteger.valueOf(6800));
+    }
+
+    private void addRunTextWithTabs(XWPFRun run, String line) {
+        String[] parts = line.split("\\t", -1);
+        for (int i = 0; i < parts.length; i++) {
+            if (i > 0) {
+                run.addTab();
+            }
+            if (!parts[i].isEmpty()) {
+                run.setText(parts[i]);
+            }
+        }
+    }
+
+    private String replaceTemplateText(String text, Map<String, String> values) {
+        String result = text;
+        for (Map.Entry<String, String> entry : values.entrySet()) {
+            result = result.replaceAll(placeholderRegex(entry.getKey()), java.util.regex.Matcher.quoteReplacement(entry.getValue()));
+        }
+        return result;
+    }
+
+    private String placeholderRegex(String key) {
+        StringBuilder pattern = new StringBuilder("\\$\\{\\s*");
+        for (int i = 0; i < key.length(); i++) {
+            pattern.append(java.util.regex.Pattern.quote(String.valueOf(key.charAt(i)))).append("\\s*");
+        }
+        pattern.append("\\}");
+        return pattern.toString();
+    }
+
+    private Map<String, String> pvFiliereBoxes(String filiere) {
+        Map<String, String> boxes = new HashMap<>();
+        boxes.put("box_id", "\u2610");
+        boxes.put("box_gi", "\u2610");
+        boxes.put("box_tdia", "\u2610");
+
+        String normalized = safe(filiere).toUpperCase(Locale.ROOT);
+        if (normalized.contains("TDIA") || normalized.contains("TRANSFORMATION")) {
+            boxes.put("box_tdia", "\u2612");
+        } else if (normalized.contains("GI") || normalized.contains("INFORMATIQUE")) {
+            boxes.put("box_gi", "\u2612");
+        } else if (normalized.contains("ID") || normalized.contains("DONN")) {
+            boxes.put("box_id", "\u2612");
+        }
+        return boxes;
+    }
+
+    private String studentNames(List<Soutenance> group) {
+        List<String> names = new ArrayList<>();
+        for (Soutenance s : group) {
+            Etudiant e = s.getEtudiant();
+            if (e != null) names.add(safe(e.getNomE()) + " " + safe(e.getPrenomE()));
+        }
+        return String.join(" / ", names);
+    }
+
+    private String pvFileName(List<Soutenance> group) {
+        Soutenance first = group.get(0);
+        Etudiant etudiant = first.getEtudiant();
+        String nom = etudiant != null ? safe(etudiant.getNomE()) : "";
+        String prenom = etudiant != null ? safe(etudiant.getPrenomE()) : "";
+        String student = sanitizeFilePart(nom) + "_" + sanitizeFilePart(prenom);
+        return "Fiche_Evaluation_PFE_" + student + ".docx";
+    }
+
+    private String pvProfessorFolderName(List<Soutenance> group) {
+        Soutenance first = group.get(0);
+        String professor = first.getJury() != null
+                ? profName(first.getJury().getPresident())
+                : "";
+        return sanitizeFilePart(professor);
+    }
+
+    private String normalizeName(String value) {
+        String normalized = Normalizer.normalize(safe(value), Normalizer.Form.NFD);
+        return normalized.replaceAll("\\p{M}", "");
+    }
+
+    private String sanitizeFilePart(String value) {
+        String cleaned = normalizeName(value).replaceAll("[^A-Za-z0-9_-]+", "_");
+        cleaned = cleaned.replaceAll("_+", "_").replaceAll("^_|_$", "");
+        return cleaned.isEmpty() ? "PV" : cleaned;
+    }
+
+    private String uniqueZipName(String fileName, Set<String> usedNames) {
+        if (usedNames.add(fileName)) return fileName;
+        int dot = fileName.lastIndexOf('.');
+        String base = dot > 0 ? fileName.substring(0, dot) : fileName;
+        String ext = dot > 0 ? fileName.substring(dot) : "";
+        int i = 2;
+        while (!usedNames.add(base + "_" + i + ext)) {
+            i++;
+        }
+        return base + "_" + i + ext;
+    }
+
+    private String encodeDownloadFileName(String fileName) {
+        try {
+            return URLEncoder.encode(fileName, "UTF-8").replace("+", "%20");
+        } catch (java.io.UnsupportedEncodingException e) {
+            return fileName;
+        }
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private void doGenererPvPdf(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+        List<Soutenance> soutenances = service.getAllSoutenances();
+        if (soutenances.isEmpty()) {
+            resp.sendRedirect("pv.do");
+            return;
+        }
+
+        resp.setContentType("application/pdf");
+        resp.setHeader("Content-Disposition", "attachment; filename=PV_Soutenances.pdf");
+        generateAllPvPdf(resp.getOutputStream(), soutenances);
+    }
+
+    private void generateAllPvPdf(java.io.OutputStream os, List<Soutenance> soutenances)
+            throws IOException {
+        PdfWriter writer = new PdfWriter(os);
+        PdfDocument pdf = new PdfDocument(writer);
+        pdf.setDefaultPageSize(PageSize.A4);
+        com.itextpdf.layout.Document doc = new com.itextpdf.layout.Document(pdf);
+        doc.setMargins(20, 30, 20, 30);
+
+        PdfFont bold = PdfFontFactory.createFont(StandardFonts.HELVETICA_BOLD);
+        PdfFont normal = PdfFontFactory.createFont(StandardFonts.HELVETICA);
+        PdfFont italic = PdfFontFactory.createFont(StandardFonts.HELVETICA_OBLIQUE);
+        SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
+
+        DeviceRgb headerBlue = new DeviceRgb(18, 52, 153);
+        DeviceRgb lightGray = new DeviceRgb(245, 245, 245);
+
+        Map<String, List<Soutenance>> groups = new LinkedHashMap<>();
+        for (Soutenance s : soutenances) {
+            if (s.getJury() == null || s.getDate() == null || s.getSalle() == null) continue;
+            String key = s.getJury().getIdJury() + "_" + s.getDate() + "_" + s.getHeure() + "_" + s.getSalle().getId_salle();
+            groups.computeIfAbsent(key, k -> new ArrayList<>()).add(s);
+        }
+
+        boolean firstPage = true;
+        for (List<Soutenance> group : groups.values()) {
+            if (group.isEmpty()) continue;
+            if (!firstPage) {
+                doc.add(new com.itextpdf.layout.element.AreaBreak(
+                        com.itextpdf.layout.properties.AreaBreakType.NEXT_PAGE));
+            }
+            firstPage = false;
+
+            Soutenance s = group.get(0);
+            Professeur encadrant = s.getJury().getPresident();
+            Professeur jury1 = s.getJury().getRapporteur1();
+            Professeur jury2 = s.getJury().getRapporteur2();
+
+            StringBuilder nomComplet = new StringBuilder();
+            StringBuilder filiereStr = new StringBuilder();
+            String sujet = s.getEtudiant().getSujet_stage() != null ? s.getEtudiant().getSujet_stage() : "-";
+            for (int i = 0; i < group.size(); i++) {
+                Etudiant e = group.get(i).getEtudiant();
+                if (i > 0) {
+                    nomComplet.append("\n");
+                    filiereStr.append(" / ");
+                }
+                nomComplet.append(e.getNomE()).append(" ").append(e.getPrenomE());
+                if (i == 0) filiereStr.append(e.getFiliere());
+            }
+
+            doc.add(new Paragraph("Universite Abdelmalek Essaadi | ENSA Al Hoceima")
+                    .setFont(bold).setFontSize(10)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    .setFontColor(headerBlue).setMarginBottom(0));
+            doc.add(new Paragraph("Departement Mathematiques et Informatique")
+                    .setFont(normal).setFontSize(8)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    .setMarginBottom(4));
+
+            pvAddSeparator(doc, headerBlue);
+
+            doc.add(new Paragraph("Proces-Verbal de Soutenance - PFE")
+                    .setFont(bold).setFontSize(13)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    .setFontColor(headerBlue).setMarginTop(4).setMarginBottom(0));
+            doc.add(new Paragraph("Annee Universitaire 2025/2026")
+                    .setFont(italic).setFontSize(8)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    .setMarginBottom(6));
+
+            pvAddSeparator(doc, headerBlue);
+            doc.add(new Paragraph("").setMarginBottom(4));
+
+            Table infoTable = new Table(UnitValue.createPercentArray(new float[]{28, 72}))
+                    .useAllAvailableWidth().setMarginBottom(6);
+            pvAddInfoRow(infoTable, "Etudiant(e)", nomComplet.toString(), bold, normal, lightGray);
+            pvAddInfoRow(infoTable, "Filiere", filiereStr.toString(), bold, normal, null);
+            pvAddInfoRow(infoTable, "Sujet du PFE", sujet, bold, normal, lightGray);
+            pvAddInfoRow(infoTable, "Date / Heure / Salle",
+                    sdf.format(s.getDate()) + " - " + s.getHeure() + " - " + s.getSalle().getNum_salle(),
+                    bold, normal, null);
+            doc.add(infoTable);
+
+            doc.add(new Paragraph("Composition du Jury")
+                    .setFont(bold).setFontSize(10).setFontColor(headerBlue)
+                    .setMarginBottom(3));
+
+            Table juryTable = new Table(UnitValue.createPercentArray(new float[]{40, 30, 30}))
+                    .useAllAvailableWidth().setMarginBottom(6);
+            juryTable.addHeaderCell(pvHeaderCellBlue("Nom et Prenom", bold, headerBlue));
+            juryTable.addHeaderCell(pvHeaderCellBlue("Qualite", bold, headerBlue));
+            juryTable.addHeaderCell(pvHeaderCellBlue("Signature", bold, headerBlue));
+            juryTable.addCell(pvCell(profName(encadrant), normal));
+            juryTable.addCell(pvCell("President / Encadrant", normal));
+            juryTable.addCell(new Cell().setHeight(22).setPadding(3));
+            juryTable.addCell(pvCell(profName(jury1), normal));
+            juryTable.addCell(pvCell("Examinateur", normal));
+            juryTable.addCell(new Cell().setHeight(22).setPadding(3));
+            juryTable.addCell(pvCell(profName(jury2), normal));
+            juryTable.addCell(pvCell("Examinateur", normal));
+            juryTable.addCell(new Cell().setHeight(22).setPadding(3));
+            doc.add(juryTable);
+
+            doc.add(new Paragraph("Evaluation")
+                    .setFont(bold).setFontSize(10).setFontColor(headerBlue)
+                    .setMarginBottom(3));
+
+            Table noteTable = new Table(UnitValue.createPercentArray(new float[]{40, 20, 20, 20}))
+                    .useAllAvailableWidth().setMarginBottom(4);
+            noteTable.addHeaderCell(pvHeaderCellBlue("Critere", bold, headerBlue));
+            noteTable.addHeaderCell(pvHeaderCellBlue("Coef.", bold, headerBlue));
+            noteTable.addHeaderCell(pvHeaderCellBlue("Note / 20", bold, headerBlue));
+            noteTable.addHeaderCell(pvHeaderCellBlue("Ponderee", bold, headerBlue));
+            noteTable.addCell(pvCell("Contenu du travail", normal));
+            noteTable.addCell(pvCellCenter("0,50", normal));
+            noteTable.addCell(pvEmptyCell());
+            noteTable.addCell(pvEmptyCell());
+            noteTable.addCell(pvCell("Qualite du memoire", normal));
+            noteTable.addCell(pvCellCenter("0,30", normal));
+            noteTable.addCell(pvEmptyCell());
+            noteTable.addCell(pvEmptyCell());
+            noteTable.addCell(pvCell("Presentation et soutenance", normal));
+            noteTable.addCell(pvCellCenter("0,20", normal));
+            noteTable.addCell(pvEmptyCell());
+            noteTable.addCell(pvEmptyCell());
+            doc.add(noteTable);
+
+            Table moyenneTable = new Table(UnitValue.createPercentArray(new float[]{55, 45}))
+                    .useAllAvailableWidth().setMarginBottom(4);
+            moyenneTable.addCell(new Cell()
+                    .add(new Paragraph("Moyenne = 0,5 x Contenu + 0,3 x Memoire + 0,2 x Presentation")
+                            .setFont(italic).setFontSize(8))
+                    .setBorder(com.itextpdf.layout.borders.Border.NO_BORDER)
+                    .setPadding(3));
+            moyenneTable.addCell(new Cell()
+                    .add(new Paragraph("Moyenne Finale :  ________ / 20")
+                            .setFont(bold).setFontSize(10))
+                    .setBorder(new com.itextpdf.layout.borders.SolidBorder(headerBlue, 1.2f))
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    .setPadding(5));
+            doc.add(moyenneTable);
+
+            Table mentionTable = new Table(UnitValue.createPercentArray(new float[]{100}))
+                    .useAllAvailableWidth().setMarginBottom(4);
+            mentionTable.addCell(new Cell()
+                    .add(new Paragraph("Mention :  Tres Bien   Bien   Assez Bien   Passable   Ajourne(e)")
+                            .setFont(normal).setFontSize(9))
+                    .setPadding(4));
+            doc.add(mentionTable);
+
+            doc.add(new Paragraph("Observations :").setFont(bold).setFontSize(9).setMarginBottom(2));
+            Table obsTable = new Table(UnitValue.createPercentArray(new float[]{100}))
+                    .useAllAvailableWidth().setMarginBottom(4);
+            obsTable.addCell(new Cell().setHeight(28)
+                    .setBorder(new com.itextpdf.layout.borders.DashedBorder(ColorConstants.GRAY, 0.5f))
+                    .setPadding(3));
+            doc.add(obsTable);
+
+            doc.add(new Paragraph("Fait a Al Hoceima, le " + sdf.format(s.getDate()))
+                    .setFont(italic).setFontSize(8)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.RIGHT));
+        }
+
+        doc.close();
+    }
+
+    private String profName(Professeur professeur) {
+        if (professeur == null) return "-";
+        return professeur.getNom() + " " + professeur.getPrenom();
+    }
+
+    private void pvAddSeparator(com.itextpdf.layout.Document doc, DeviceRgb color) {
+        Table sep = new Table(UnitValue.createPercentArray(new float[]{100})).useAllAvailableWidth();
+        sep.addCell(new Cell().setHeight(2)
+                .setBackgroundColor(color)
+                .setBorder(com.itextpdf.layout.borders.Border.NO_BORDER));
+        doc.add(sep);
+    }
+
+    private void pvAddInfoRow(Table table, String label, String value,
+                              PdfFont labelFont, PdfFont valueFont, DeviceRgb bgColor) {
+        Cell lc = new Cell()
+                .add(new Paragraph(label).setFont(labelFont).setFontSize(10))
+                .setPadding(5)
+                .setBorder(new com.itextpdf.layout.borders.SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f));
+        Cell vc = new Cell()
+                .add(new Paragraph(value != null ? value : "-").setFont(valueFont).setFontSize(10))
+                .setPadding(5)
+                .setBorder(new com.itextpdf.layout.borders.SolidBorder(ColorConstants.LIGHT_GRAY, 0.5f));
+        if (bgColor != null) {
+            lc.setBackgroundColor(bgColor);
+            vc.setBackgroundColor(bgColor);
+        }
+        table.addCell(lc);
+        table.addCell(vc);
+    }
+
+    private Cell pvHeaderCellBlue(String text, PdfFont font, DeviceRgb bg) {
+        return new Cell()
+                .add(new Paragraph(text).setFont(font).setFontSize(9).setFontColor(ColorConstants.WHITE))
+                .setBackgroundColor(bg)
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setVerticalAlignment(VerticalAlignment.MIDDLE)
+                .setPadding(5);
+    }
+
+    private Cell pvCell(String text, PdfFont font) {
+        return new Cell()
+                .add(new Paragraph(text).setFont(font).setFontSize(9))
+                .setPadding(5)
+                .setVerticalAlignment(VerticalAlignment.MIDDLE);
+    }
+
+    private Cell pvCellCenter(String text, PdfFont font) {
+        return new Cell()
+                .add(new Paragraph(text).setFont(font).setFontSize(9))
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setPadding(5)
+                .setVerticalAlignment(VerticalAlignment.MIDDLE);
+    }
+
+    private Cell pvEmptyCell() {
+        return new Cell()
+                .add(new Paragraph("..........").setFontSize(10).setFontColor(ColorConstants.LIGHT_GRAY))
+                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                .setVerticalAlignment(VerticalAlignment.MIDDLE)
+                .setHeight(25)
+                .setPadding(5);
     }
 }

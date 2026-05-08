@@ -22,14 +22,27 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 
 public class VerificationServiceImpl implements VerificationService {
 
-    private final AffectationDAO affectationDAO = new AffectationDAOImpl();
-    private final ProfesseurDAO professeurDAO = new ProfesseurDAOImpl();
-    private final SoutenanceDAO soutenanceDAO = new SoutenanceDAOImpl();
+    private final AffectationDAO affectationDAO;
+    private final ProfesseurDAO professeurDAO;
+    private final SoutenanceDAO soutenanceDAO;
+
+    public VerificationServiceImpl() {
+        this(new AffectationDAOImpl(), new ProfesseurDAOImpl(), new SoutenanceDAOImpl());
+    }
+
+    public VerificationServiceImpl(AffectationDAO affectationDAO,
+                                   ProfesseurDAO professeurDAO,
+                                   SoutenanceDAO soutenanceDAO) {
+        this.affectationDAO = Objects.requireNonNull(affectationDAO);
+        this.professeurDAO = Objects.requireNonNull(professeurDAO);
+        this.soutenanceDAO = Objects.requireNonNull(soutenanceDAO);
+    }
 
     @Override
     public VerificationReport verifyGeneratedFiles(List<String> filieresFiltre) {

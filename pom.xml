@@ -13,7 +13,6 @@
 
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-    <!-- ✅ Java 21 — correspond exactement à votre JVM (JDK 21.0.10) -->
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
   </properties>
@@ -30,7 +29,7 @@
       <scope>test</scope>
     </dependency>
 
-    <!-- ===== Servlet API (Tomcat 9 = Java EE 8) ===== -->
+    <!-- ===== Servlet API ===== -->
     <dependency>
       <groupId>javax.servlet</groupId>
       <artifactId>javax.servlet-api</artifactId>
@@ -38,7 +37,7 @@
       <scope>provided</scope>
     </dependency>
 
-    <!-- ===== JSP API (Tomcat 9) ===== -->
+    <!-- ===== JSP API  ===== -->
     <dependency>
         <groupId>javax.servlet.jsp</groupId>
         <artifactId>javax.servlet.jsp-api</artifactId>
@@ -67,14 +66,14 @@
       <version>8.3.0</version>
     </dependency>
 
-    <!-- ===== Apache POI — Excel (✅ une seule version) ===== -->
+    <!-- ===== Apache POI ===== -->
     <dependency>
       <groupId>org.apache.poi</groupId>
       <artifactId>poi-ooxml</artifactId>
       <version>5.2.5</version>
     </dependency>
 
-    <!-- ===== iText 7 — Export PDF ===== -->
+    <!-- ===== iText 7 ===== -->
     <dependency>
       <groupId>com.itextpdf</groupId>
       <artifactId>kernel</artifactId>
@@ -92,7 +91,7 @@
 	    <version>2.20.0</version>
 	</dependency>
 
-    <!-- ===== LangChain4j (NVIDIA NIM / OpenAI-compatible) ===== -->
+    <!-- ===== LangChain4j ===== -->
     <dependency>
       <groupId>dev.langchain4j</groupId>
       <artifactId>langchain4j-open-ai</artifactId>

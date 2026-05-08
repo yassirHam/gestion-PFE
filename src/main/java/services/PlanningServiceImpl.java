@@ -6,108 +6,81 @@ import entities.*;
 import java.util.*;
 
 /**
- * Planning generator — assigns jury (2 profs ≠ encadrant), room, date and hour
- * for every affectation already in DB.
+ * Generates a soutenance planning from existing affectations.
  *
- * Constraints:
- *  - Start date : 23 June 2026
- *  - Maximum 4 days of planning
- *  - Time slots : 9h, 10h, 11h (morning) and 14h, 15h, 16h, 17h (afternoon)
- *  - A professor needs at least 1-hour REST between two consecutive soutenances
- *  - Spread load: encadrants must not have all their soutenances on the same day
- *  - Spread slots: fill all hours (9h, 10h...) evenly across rooms
- *  - EQUITY: balanced jury membership across all professors
- *  - INFO REQUIRED: Each jury must have at least 2 prof with "info" in discipline/specialite
+ * The orchestration stays here, while variable business rules are delegated to
+ * configuration and strategy objects so the planning can be extended without
+ * rewriting this service.
  */
 public class PlanningServiceImpl implements PlanningService {
 
-    // ── DAOs ─────────────────────────────────────────────────────────────────
-    private final AffectationDAO affDao  = new AffectationDAOImpl();
-    private final ProfesseurDAO  profDao = new ProfesseurDAOImpl();
-    private final SalleDAO       salleDao = new SalleDAOImpl();
-    private final JuryDAO        juryDao  = new JuryDAOImpl();
-    private final SoutenanceDAO  soutDao  = new SoutenanceDAOImpl();
-
-    // ── NLP Service ──────────────────────────────────────────────────────────
-    private final NlpService nlpService = new NlpServiceImpl();
-
-    // ── Time slots ───────────────────────────────────────────────────────────
-    private static final int[] SLOTS = {9, 10, 11, 14, 15, 16, 17};
-
-    // ── Start date: 23 June 2026, max 4 days ─────────────────────────────────
-    private static final int START_YEAR  = 2026;
-    private static final int START_MONTH = Calendar.JUNE;
-    private static final int START_DAY   = 23;
-    private static final int MAX_DAYS    = 4;
-
-    // ── Default rooms if DB is empty ─────────────────────────────────────────
-    private static final String[] DEFAULT_ROOMS = {"S4A", "S5A", "S16A", "S17A", "AMPHI A"};
-
-    // ── Professor color palette (hex, no #) ──────────────────────────────────
-    private static final String[] COLOR_PALETTE = {
-        "E74C3C", "3498DB", "2ECC71", "F39C12", "9B59B6",
-        "1ABC9C", "E67E22", "2980B9", "27AE60", "8E44AD",
-        "C0392B", "16A085", "D35400", "2C3E50", "F1C40F",
-        "7F8C8D", "6C3483", "117A65", "784212", "1F618D"
-    };
+    private final AffectationDAO affDao;
+    private final ProfesseurDAO profDao;
+    private final SalleDAO salleDao;
+    private final JuryDAO juryDao;
+    private final SoutenanceDAO soutDao;
+    private final NlpService nlpService;
+    private final PlanningConfig config;
+    private final JurySelectionStrategy jurySelectionStrategy;
 
     private Map<Long, String> profColorMap = new LinkedHashMap<>();
 
-    // ─────────────────────────────────────────────────────────────────────────
+    public PlanningServiceImpl() {
+        this(new AffectationDAOImpl(),
+                new ProfesseurDAOImpl(),
+                new SalleDAOImpl(),
+                new JuryDAOImpl(),
+                new SoutenanceDAOImpl(),
+                new NlpServiceImpl(),
+                PlanningConfig.defaults(),
+                new DefaultJurySelectionStrategy());
+    }
+
+    public PlanningServiceImpl(AffectationDAO affDao,
+                               ProfesseurDAO profDao,
+                               SalleDAO salleDao,
+                               JuryDAO juryDao,
+                               SoutenanceDAO soutDao,
+                               NlpService nlpService,
+                               PlanningConfig config,
+                               JurySelectionStrategy jurySelectionStrategy) {
+        this.affDao = Objects.requireNonNull(affDao);
+        this.profDao = Objects.requireNonNull(profDao);
+        this.salleDao = Objects.requireNonNull(salleDao);
+        this.juryDao = Objects.requireNonNull(juryDao);
+        this.soutDao = Objects.requireNonNull(soutDao);
+        this.nlpService = Objects.requireNonNull(nlpService);
+        this.config = Objects.requireNonNull(config);
+        this.jurySelectionStrategy = Objects.requireNonNull(jurySelectionStrategy);
+    }
 
     @Override
-    public List<Soutenance> genererPlanning(List<String> filieres, List<String> log, List<Long> selectedSalles, String startDate) {
-
-        List<Affectation> allAffectations = affDao.findAllWithDetails();
-        // Filter by selected filières if provided
-        List<Affectation> affectations;
-        if (filieres != null && !filieres.isEmpty()) {
-            affectations = new ArrayList<>();
-            for (Affectation a : allAffectations) {
-                if (filieres.contains(a.getEtudiant().getFiliere())) {
-                    affectations.add(a);
-                }
-            }
-        } else {
-            affectations = allAffectations;
-        }
-
+    public List<Soutenance> genererPlanning(List<String> filieres,
+                                            List<String> log,
+                                            List<Long> selectedSalles,
+                                            String startDate) {
+        List<Affectation> affectations = filterAffectationsByFiliere(affDao.findAllWithDetails(), filieres);
         if (affectations.isEmpty()) {
-            log.add(" Aucune affectation trouvée pour les filières sélectionnées.");
+            log.add("Aucune affectation trouvee pour les filieres selectionnees.");
             return Collections.emptyList();
         }
 
         List<Professeur> allProfs = profDao.findAll();
         if (allProfs.size() < 3) {
-            log.add(" Il faut au moins 3 professeurs.");
+            log.add("Il faut au moins 3 professeurs.");
             return Collections.emptyList();
         }
 
         ensureSallesExistent();
-        List<Salle> allSalles = salleDao.findAll();
-        List<Salle> salles = new ArrayList<>();
-        if (selectedSalles == null || selectedSalles.isEmpty()) {
-            salles.addAll(allSalles);
-        } else {
-            for (Salle s : allSalles) {
-                if (selectedSalles.contains(s.getId_salle())) {
-                    salles.add(s);
-                }
-            }
-        }
-        
+        List<Salle> salles = selectSalles(selectedSalles);
         if (salles.isEmpty()) {
-            log.add(" Aucune salle sélectionnée ou disponible.");
+            log.add("Aucune salle selectionnee ou disponible.");
             return Collections.emptyList();
         }
-        
+
         buildColorMap(allProfs);
+        resetPlanning();
 
-        // Reset old planning
-        soutDao.deleteAll();
-        juryDao.deleteAll();
-
-        // State trackers
         Map<String, Set<Long>> profBusyAtSlot = new HashMap<>();
         Map<Long, List<String>> profSchedule = new HashMap<>();
         Map<Long, Integer> profJuryCount = new HashMap<>();
@@ -119,21 +92,108 @@ public class PlanningServiceImpl implements PlanningService {
             profDailyCount.put(p.getIdp(), new HashMap<>());
         }
 
-        // Pre-compute the 4 dates
-        int startYear = START_YEAR;
-        int startMonth = START_MONTH;
-        int startDay = START_DAY;
-        
+        PlanningDates planningDates = buildPlanningDates(startDate, log);
+        List<List<Affectation>> projects = groupAffectationsByProject(affectations);
+        Collections.shuffle(projects);
+
+        Map<String, SujetAnalysis> nlpBatchResults = analyzeProjectSubjects(projects, allProfs, log);
+        List<Soutenance> result = new ArrayList<>();
+        int[] slots = config.getSlots();
+
+        for (List<Affectation> project : projects) {
+            Affectation mainAff = project.get(0);
+            Etudiant etudiant = mainAff.getEtudiant();
+            Professeur encadrant = mainAff.getEncadrant();
+            SujetAnalysis nlpResult = getProjectAnalysis(etudiant, nlpBatchResults, log);
+
+            List<Professeur> juryPool = new ArrayList<>(allProfs);
+            juryPool.removeIf(p -> p.getIdp().equals(encadrant.getIdp()));
+
+            PlanningChoice bestChoice = findBestPlanningChoice(
+                    encadrant,
+                    juryPool,
+                    planningDates,
+                    slots,
+                    salles,
+                    profBusyAtSlot,
+                    profSchedule,
+                    profJuryCount,
+                    profDailyCount,
+                    roomBusy,
+                    nlpResult);
+
+            if (bestChoice != null) {
+                result.addAll(saveProjectPlanning(
+                        project,
+                        encadrant,
+                        bestChoice,
+                        planningDates,
+                        profBusyAtSlot,
+                        profSchedule,
+                        profDailyCount,
+                        profJuryCount,
+                        roomBusy,
+                        log));
+            } else {
+                log.add("Impossible de planifier: " + projectStudentNames(project)
+                        + " (aucun creneau valide dans les " + config.getMaxDays() + " jours)");
+            }
+        }
+
+        soutDao.saveAll(result);
+        logJuryDistribution(log, allProfs, profJuryCount);
+        return result;
+    }
+
+    private List<Affectation> filterAffectationsByFiliere(List<Affectation> allAffectations, List<String> filieres) {
+        if (filieres == null || filieres.isEmpty()) {
+            return allAffectations;
+        }
+
+        List<Affectation> affectations = new ArrayList<>();
+        for (Affectation a : allAffectations) {
+            if (filieres.contains(a.getEtudiant().getFiliere())) {
+                affectations.add(a);
+            }
+        }
+        return affectations;
+    }
+
+    private List<Salle> selectSalles(List<Long> selectedSalles) {
+        List<Salle> allSalles = salleDao.findAll();
+        if (selectedSalles == null || selectedSalles.isEmpty()) {
+            return new ArrayList<>(allSalles);
+        }
+
+        List<Salle> salles = new ArrayList<>();
+        for (Salle s : allSalles) {
+            if (selectedSalles.contains(s.getId_salle())) {
+                salles.add(s);
+            }
+        }
+        return salles;
+    }
+
+    private void resetPlanning() {
+        soutDao.deleteAll();
+        juryDao.deleteAll();
+    }
+
+    private PlanningDates buildPlanningDates(String startDate, List<String> log) {
+        int startYear = config.getDefaultStartYear();
+        int startMonth = config.getDefaultStartMonth();
+        int startDay = config.getDefaultStartDay();
+
         if (startDate != null && !startDate.trim().isEmpty()) {
             try {
                 String[] parts = startDate.split("-");
                 if (parts.length == 3) {
                     startYear = Integer.parseInt(parts[0]);
-                    startMonth = Integer.parseInt(parts[1]) - 1; // Calendar month is 0-based
+                    startMonth = Integer.parseInt(parts[1]) - 1;
                     startDay = Integer.parseInt(parts[2]);
                 }
             } catch (Exception e) {
-                log.add("⚠️ Format de date invalide, utilisation de la date par défaut.");
+                log.add("Format de date invalide, utilisation de la date par defaut.");
             }
         }
 
@@ -144,358 +204,292 @@ public class PlanningServiceImpl implements PlanningService {
         List<String> validDates = new ArrayList<>();
         List<Date> validDateObjects = new ArrayList<>();
         int daysAdded = 0;
-        int d = 0;
-        while (daysAdded < MAX_DAYS) {
-            Calendar day = (Calendar) baseCal.clone();
-            day.add(Calendar.DAY_OF_MONTH, d++);
-            int dow = day.get(Calendar.DAY_OF_WEEK);
-            // Skip weekends
-            if (dow == Calendar.SATURDAY || dow == Calendar.SUNDAY) continue;
+        int offset = 0;
 
-            String dateStr = String.format("%04d-%02d-%02d",
+        while (daysAdded < config.getMaxDays()) {
+            Calendar day = (Calendar) baseCal.clone();
+            day.add(Calendar.DAY_OF_MONTH, offset++);
+            int dow = day.get(Calendar.DAY_OF_WEEK);
+            if (dow == Calendar.SATURDAY || dow == Calendar.SUNDAY) {
+                continue;
+            }
+
+            validDates.add(String.format("%04d-%02d-%02d",
                     day.get(Calendar.YEAR),
                     day.get(Calendar.MONTH) + 1,
-                    day.get(Calendar.DAY_OF_MONTH));
-            validDates.add(dateStr);
+                    day.get(Calendar.DAY_OF_MONTH)));
             validDateObjects.add(day.getTime());
             daysAdded++;
         }
 
-        List<Soutenance> result = new ArrayList<>();
+        return new PlanningDates(validDates, validDateObjects);
+    }
 
-        // Grouper les affectations en projets (binômes ou individuels)
+    private List<List<Affectation>> groupAffectationsByProject(List<Affectation> affectations) {
         Map<String, Affectation> affByCne = new HashMap<>();
-        for (Affectation a : affectations) affByCne.put(a.getEtudiant().getCne(), a);
-        
+        for (Affectation a : affectations) {
+            affByCne.put(a.getEtudiant().getCne(), a);
+        }
+
         List<List<Affectation>> projects = new ArrayList<>();
         Set<String> processedCne = new HashSet<>();
-        
+
         for (Affectation a : affectations) {
             String cne = a.getEtudiant().getCne();
-            if (processedCne.contains(cne)) continue;
-            
-            List<Affectation> proj = new ArrayList<>();
-            proj.add(a);
+            if (processedCne.contains(cne)) {
+                continue;
+            }
+
+            List<Affectation> project = new ArrayList<>();
+            project.add(a);
             processedCne.add(cne);
-            
+
             if (a.getEtudiant().hasBinome() && affByCne.containsKey(a.getEtudiant().getBinome_cne())) {
                 Affectation partnerAff = affByCne.get(a.getEtudiant().getBinome_cne());
                 if (!processedCne.contains(partnerAff.getEtudiant().getCne())) {
-                    proj.add(partnerAff);
+                    project.add(partnerAff);
                     processedCne.add(partnerAff.getEtudiant().getCne());
                 }
             }
-            projects.add(proj);
+            projects.add(project);
         }
 
-        // Mélanger les projets pour que le premier étudiant de la base ne soit pas toujours programmé le lundi à 9h !
-        Collections.shuffle(projects);
+        return projects;
+    }
 
-        // ── BATCH NLP Analysis (Pre-processing) ─────────────────────────────────
+    private Map<String, SujetAnalysis> analyzeProjectSubjects(List<List<Affectation>> projects,
+                                                              List<Professeur> allProfs,
+                                                              List<String> log) {
         List<String> specialitesDispo = new ArrayList<>();
         for (Professeur p : allProfs) {
             if (p.getSpecialite() != null && !p.getSpecialite().trim().isEmpty()) {
                 specialitesDispo.add(p.getSpecialite().trim());
             }
         }
-        specialitesDispo = new ArrayList<>(new LinkedHashSet<>(specialitesDispo)); // Remove duplicates
+        specialitesDispo = new ArrayList<>(new LinkedHashSet<>(specialitesDispo));
 
         List<String> allUniqueSujets = new ArrayList<>();
         for (List<Affectation> project : projects) {
-            String s = project.get(0).getEtudiant().getSujet_stage();
-            if (s != null && !s.trim().isEmpty() && !allUniqueSujets.contains(s)) {
-                allUniqueSujets.add(s);
-            }
-        }
-        
-        java.util.Map<String, SujetAnalysis> nlpBatchResults = new java.util.HashMap<>();
-        if (!allUniqueSujets.isEmpty()) {
-            try {
-                log.add("🤖 Démarrage analyse NLP Batch pour " + allUniqueSujets.size() + " sujets uniques...");
-                nlpBatchResults = nlpService.analyzeSujetsBatch(allUniqueSujets, specialitesDispo);
-                log.add("✅ Analyse NLP Batch terminée !");
-            } catch (Exception e) {
-                log.add("⚠️ Erreur NLP Batch : " + e.getMessage());
+            String subject = project.get(0).getEtudiant().getSujet_stage();
+            if (subject != null && !subject.trim().isEmpty() && !allUniqueSujets.contains(subject)) {
+                allUniqueSujets.add(subject);
             }
         }
 
-        for (List<Affectation> project : projects) {
-            Affectation mainAff = project.get(0);
-            Etudiant etudiant = mainAff.getEtudiant(); // Lead student for logging
-            Professeur encadrant = mainAff.getEncadrant();
-
-            // ── Retrieve NLP Result ─────────────────────────────────────────────────
-            String sujet = etudiant.getSujet_stage();
-            SujetAnalysis nlpResult = null;
-            if (sujet != null && !sujet.trim().isEmpty()) {
-                nlpResult = nlpBatchResults.get(sujet);
-                if (nlpResult != null) {
-                    log.add("🤖 NLP [" + etudiant.getNomE() + "] sujet='" + sujet + "' → " + nlpResult);
-                    if (nlpResult.getLanguage() != null) {
-                        etudiant.setLanguage(nlpResult.getLanguage());
-                    }
-                }
-            }
-
-            List<Professeur> juryPool = new ArrayList<>(allProfs);
-            juryPool.removeIf(p -> p.getIdp().equals(encadrant.getIdp()));
-
-            int bestDayIdx = -1;
-            int bestSlot = -1;
-            Salle bestSalle = null;
-            Professeur bestM1 = null;
-            Professeur bestM2 = null;
-            
-            int minDailyLoad = Integer.MAX_VALUE;
-            int minSlotLoad = Integer.MAX_VALUE;
-
-            // Search for the best slot across all 4 days
-            for (int dayIdx = 0; dayIdx < validDates.size(); dayIdx++) {
-                String dateStr = validDates.get(dayIdx);
-                int encadrantDailyLoad = profDailyCount.get(encadrant.getIdp()).getOrDefault(dateStr, 0);
-
-                // Optimization: if this day is already worse than the best found, skip
-                if (encadrantDailyLoad > minDailyLoad) continue;
-
-                for (int slot : SLOTS) {
-                    if (!isProfAvailable(encadrant.getIdp(), dateStr, slot, profBusyAtSlot, profSchedule)) continue;
-
-                    String slotKey = dateStr + "|" + slot;
-                    int slotLoad = getSlotLoad(slotKey, salles, roomBusy);
-
-                    // We want to minimize encadrant load FIRST, then distribute slots evenly
-                    boolean better = false;
-                    if (encadrantDailyLoad < minDailyLoad) {
-                        better = true;
-                    } else if (encadrantDailyLoad == minDailyLoad) {
-                        if (slotLoad < minSlotLoad) better = true;
-                    }
-
-                    if (!better) continue;
-
-                    Salle freeSalle = getFreeRoom(slotKey, salles, roomBusy);
-                    if (freeSalle == null) continue;
-
-                    // Filter and select the 2 best jury members
-                    List<Professeur> available = new ArrayList<>();
-                    for (Professeur p : juryPool) {
-                        if (isProfAvailable(p.getIdp(), dateStr, slot, profBusyAtSlot, profSchedule)) {
-                            available.add(p);
-                        }
-                    }
-                    if (available.size() < 2) continue;
-
-                    Professeur[] pickedJury = pickBestJury(encadrant, available, profJuryCount, nlpResult);
-                    if (pickedJury == null) continue;
-
-                    // If we reach here, it's the best option so far
-                    bestDayIdx = dayIdx;
-                    bestSlot = slot;
-                    bestSalle = freeSalle;
-                    bestM1 = pickedJury[0];
-                    bestM2 = pickedJury[1];
-                    minDailyLoad = encadrantDailyLoad;
-                    minSlotLoad = slotLoad;
-                }
-            }
-
-            if (bestDayIdx != -1) {
-                String dateStr = validDates.get(bestDayIdx);
-                String slotKey = dateStr + "|" + bestSlot;
-
-                markProfBusy(encadrant.getIdp(), dateStr, bestSlot, profBusyAtSlot, profSchedule, profDailyCount);
-                markProfBusy(bestM1.getIdp(),    dateStr, bestSlot, profBusyAtSlot, profSchedule, profDailyCount);
-                markProfBusy(bestM2.getIdp(),    dateStr, bestSlot, profBusyAtSlot, profSchedule, profDailyCount);
-
-                profJuryCount.merge(bestM1.getIdp(), 1, Integer::sum);
-                profJuryCount.merge(bestM2.getIdp(), 1, Integer::sum);
-
-                roomBusy.put(slotKey + "|" + bestSalle.getId_salle(), true);
-
-                Jury jury = new Jury();
-                jury.setPresident(encadrant);
-                jury.setRapporteur1(bestM1);
-                jury.setRapporteur2(bestM2);
-                jury = juryDao.save(jury);
-
-                String etuNoms = "";
-                for (Affectation aff : project) {
-                    Soutenance sout = new Soutenance();
-                    sout.setDate(validDateObjects.get(bestDayIdx));
-                    sout.setHeure(bestSlot + "h");
-                    sout.setSalle(bestSalle);
-                    sout.setEtudiant(aff.getEtudiant());
-                    sout.setJury(jury);
-                    result.add(sout);
-                    
-                    if (!etuNoms.isEmpty()) etuNoms += " & ";
-                    etuNoms += aff.getEtudiant().getNomE();
-                }
-
-                log.add("✔ " + etuNoms + " → " + dateStr + " " + bestSlot + "h | Salle: " + bestSalle.getNum_salle()
-                        + " | Enc: " + encadrant.getNom() + " | Jury: " + bestM1.getNom() + ", " + bestM2.getNom());
-            } else {
-                String etuNoms = "";
-                for (Affectation aff : project) {
-                    if (!etuNoms.isEmpty()) etuNoms += " & ";
-                    etuNoms += aff.getEtudiant().getNomE();
-                }
-                log.add("⚠️ Impossible de planifier: " + etuNoms + " (aucun créneau valide dans les 4 jours)");
-            }
+        if (allUniqueSujets.isEmpty()) {
+            return new HashMap<>();
         }
 
-        soutDao.saveAll(result);
-
-        log.add("─── Répartition des participations jury ───");
-        profJuryCount.entrySet().stream()
-            .sorted(Map.Entry.comparingByValue())
-            .forEach(e -> {
-                Professeur p = allProfs.stream().filter(pr -> pr.getIdp().equals(e.getKey())).findFirst().orElse(null);
-                if (p != null) log.add("   " + p.getNom() + " " + p.getPrenom() + " → " + e.getValue() + " fois");
-            });
-
-        return result;
+        try {
+            log.add("Demarrage analyse NLP Batch pour " + allUniqueSujets.size() + " sujets uniques...");
+            Map<String, SujetAnalysis> nlpBatchResults = nlpService.analyzeSujetsBatch(allUniqueSujets, specialitesDispo);
+            log.add("Analyse NLP Batch terminee.");
+            return nlpBatchResults;
+        } catch (Exception e) {
+            log.add("Erreur NLP Batch : " + e.getMessage());
+            return new HashMap<>();
+        }
     }
 
-    // ── Constraints Checkers ─────────────────────────────────────────────────
+    private SujetAnalysis getProjectAnalysis(Etudiant etudiant,
+                                             Map<String, SujetAnalysis> nlpBatchResults,
+                                             List<String> log) {
+        String sujet = etudiant.getSujet_stage();
+        if (sujet == null || sujet.trim().isEmpty()) {
+            return null;
+        }
 
-    private boolean isProfAvailable(Long profId, String dateStr, int slot,
+        SujetAnalysis nlpResult = nlpBatchResults.get(sujet);
+        if (nlpResult != null) {
+            log.add("NLP [" + etudiant.getNomE() + "] sujet='" + sujet + "' -> " + nlpResult);
+            if (nlpResult.getLanguage() != null) {
+                etudiant.setLanguage(nlpResult.getLanguage());
+            }
+        }
+        return nlpResult;
+    }
+
+    private PlanningChoice findBestPlanningChoice(Professeur encadrant,
+                                                  List<Professeur> juryPool,
+                                                  PlanningDates planningDates,
+                                                  int[] slots,
+                                                  List<Salle> salles,
+                                                  Map<String, Set<Long>> profBusyAtSlot,
+                                                  Map<Long, List<String>> profSchedule,
+                                                  Map<Long, Integer> profJuryCount,
+                                                  Map<Long, Map<String, Integer>> profDailyCount,
+                                                  Map<String, Boolean> roomBusy,
+                                                  SujetAnalysis nlpResult) {
+        PlanningChoice bestChoice = null;
+        int minDailyLoad = Integer.MAX_VALUE;
+        int minSlotLoad = Integer.MAX_VALUE;
+
+        for (int dayIdx = 0; dayIdx < planningDates.validDates.size(); dayIdx++) {
+            String dateStr = planningDates.validDates.get(dayIdx);
+            int encadrantDailyLoad = profDailyCount.get(encadrant.getIdp()).getOrDefault(dateStr, 0);
+            if (encadrantDailyLoad > minDailyLoad) {
+                continue;
+            }
+
+            for (int slot : slots) {
+                if (!isProfAvailable(encadrant.getIdp(), dateStr, slot, profBusyAtSlot, profSchedule)) {
+                    continue;
+                }
+
+                String slotKey = dateStr + "|" + slot;
+                int slotLoad = getSlotLoad(slotKey, salles, roomBusy);
+                if (!isBetterChoice(encadrantDailyLoad, slotLoad, minDailyLoad, minSlotLoad)) {
+                    continue;
+                }
+
+                Salle freeSalle = getFreeRoom(slotKey, salles, roomBusy);
+                if (freeSalle == null) {
+                    continue;
+                }
+
+                List<Professeur> available = findAvailableProfessors(juryPool, dateStr, slot, profBusyAtSlot, profSchedule);
+                if (available.size() < 2) {
+                    continue;
+                }
+
+                Professeur[] pickedJury = jurySelectionStrategy.selectJury(
+                        encadrant, available, profJuryCount, nlpResult, config);
+                if (pickedJury == null) {
+                    continue;
+                }
+
+                bestChoice = new PlanningChoice(dayIdx, slot, freeSalle, pickedJury[0], pickedJury[1]);
+                minDailyLoad = encadrantDailyLoad;
+                minSlotLoad = slotLoad;
+            }
+        }
+
+        return bestChoice;
+    }
+
+    private boolean isBetterChoice(int encadrantDailyLoad,
+                                   int slotLoad,
+                                   int minDailyLoad,
+                                   int minSlotLoad) {
+        if (encadrantDailyLoad < minDailyLoad) {
+            return true;
+        }
+        return encadrantDailyLoad == minDailyLoad && slotLoad < minSlotLoad;
+    }
+
+    private List<Professeur> findAvailableProfessors(List<Professeur> juryPool,
+                                                     String dateStr,
+                                                     int slot,
+                                                     Map<String, Set<Long>> profBusyAtSlot,
+                                                     Map<Long, List<String>> profSchedule) {
+        List<Professeur> available = new ArrayList<>();
+        for (Professeur p : juryPool) {
+            if (isProfAvailable(p.getIdp(), dateStr, slot, profBusyAtSlot, profSchedule)) {
+                available.add(p);
+            }
+        }
+        return available;
+    }
+
+    private List<Soutenance> saveProjectPlanning(List<Affectation> project,
+                                                 Professeur encadrant,
+                                                 PlanningChoice choice,
+                                                 PlanningDates planningDates,
+                                                 Map<String, Set<Long>> profBusyAtSlot,
+                                                 Map<Long, List<String>> profSchedule,
+                                                 Map<Long, Map<String, Integer>> profDailyCount,
+                                                 Map<Long, Integer> profJuryCount,
+                                                 Map<String, Boolean> roomBusy,
+                                                 List<String> log) {
+        String dateStr = planningDates.validDates.get(choice.dayIdx);
+        String slotKey = dateStr + "|" + choice.slot;
+
+        markProfBusy(encadrant.getIdp(), dateStr, choice.slot, profBusyAtSlot, profSchedule, profDailyCount);
+        markProfBusy(choice.rapporteur1.getIdp(), dateStr, choice.slot, profBusyAtSlot, profSchedule, profDailyCount);
+        markProfBusy(choice.rapporteur2.getIdp(), dateStr, choice.slot, profBusyAtSlot, profSchedule, profDailyCount);
+
+        profJuryCount.merge(choice.rapporteur1.getIdp(), 1, Integer::sum);
+        profJuryCount.merge(choice.rapporteur2.getIdp(), 1, Integer::sum);
+        roomBusy.put(slotKey + "|" + choice.salle.getId_salle(), true);
+
+        Jury jury = new Jury();
+        jury.setPresident(encadrant);
+        jury.setRapporteur1(choice.rapporteur1);
+        jury.setRapporteur2(choice.rapporteur2);
+        jury = juryDao.save(jury);
+
+        List<Soutenance> soutenances = new ArrayList<>();
+        for (Affectation aff : project) {
+            Soutenance sout = new Soutenance();
+            sout.setDate(planningDates.validDateObjects.get(choice.dayIdx));
+            sout.setHeure(choice.slot + "h");
+            sout.setSalle(choice.salle);
+            sout.setEtudiant(aff.getEtudiant());
+            sout.setJury(jury);
+            soutenances.add(sout);
+        }
+
+        log.add(projectStudentNames(project) + " -> " + dateStr + " " + choice.slot + "h | Salle: "
+                + choice.salle.getNum_salle() + " | Enc: " + encadrant.getNom()
+                + " | Jury: " + choice.rapporteur1.getNom() + ", " + choice.rapporteur2.getNom());
+        return soutenances;
+    }
+
+    private boolean isProfAvailable(Long profId,
+                                    String dateStr,
+                                    int slot,
                                     Map<String, Set<Long>> profBusyAtSlot,
                                     Map<Long, List<String>> profSchedule) {
-        if (profBusyAtSlot.getOrDefault(dateStr + "|" + slot, Collections.emptySet()).contains(profId)) return false;
+        if (profBusyAtSlot.getOrDefault(dateStr + "|" + slot, Collections.emptySet()).contains(profId)) {
+            return false;
+        }
 
-        // 1-hour rest: Math.abs(existSlot - slot) == 1 means adjacent slots (forbidden)
         for (String existing : profSchedule.getOrDefault(profId, Collections.emptyList())) {
-            if (!existing.startsWith(dateStr + "|")) continue;
+            if (!existing.startsWith(dateStr + "|")) {
+                continue;
+            }
             int existSlot = Integer.parseInt(existing.split("\\|")[1]);
-            if (Math.abs(existSlot - slot) == 1) return false;
+            if (Math.abs(existSlot - slot) == 1) {
+                return false;
+            }
         }
         return true;
-    }
-
-    private boolean isInfo(Professeur p) {
-        String d = p.getDiscipline();
-        String s = p.getSpecialite();
-        if (d != null && d.toLowerCase().contains("info")) return true;
-        if (s != null && s.toLowerCase().contains("info")) return true;
-        return false;
-    }
-
-    private Professeur[] pickBestJury(Professeur encadrant, List<Professeur> available,
-                                       Map<Long, Integer> profJuryCount, SujetAnalysis nlp) {
-        boolean encadrantIsInfo = isInfo(encadrant);
-
-        // Mélanger d'abord pour avoir un tiebreak aléatoire parfait (le sort qui suit est 'stable')
-        Collections.shuffle(available);
-        // Sort by jury load (equity)
-        available.sort(Comparator.comparingInt((Professeur p) -> profJuryCount.getOrDefault(p.getIdp(), 0)));
-
-        int minLoad = available.isEmpty() ? 0 : profJuryCount.getOrDefault(available.get(0).getIdp(), 0);
-        int MAX_LOAD_GAP = 2; // Un prof ne peut pas avoir 3 jurys de plus que le prof le moins chargé (écart max = 2)
-
-        // ── NLP-aware selection ────────────────────────────────────────────
-        if (nlp != null) {
-            String targetSpec  = nlp.getBestSpecialite();    // tech specialite
-            boolean needEnglish = nlp.isEnglish();
-
-            // Find best TECH match (Rapporteur 1) - avec protection d'équité
-            Professeur techProf = available.stream()
-                    .filter(p -> profJuryCount.getOrDefault(p.getIdp(), 0) <= minLoad + MAX_LOAD_GAP)
-                    .filter(p -> p.getSpecialite() != null &&
-                                 p.getSpecialite().toLowerCase().contains(targetSpec != null ? targetSpec.toLowerCase() : ""))
-                    .findFirst().orElse(null);
-
-            // Find ENGLISH prof (Rapporteur 2) - avec protection d'équité
-            Professeur englishProf = null;
-            if (needEnglish) {
-                final Professeur fTech = techProf; // Effectively final copy
-                englishProf = available.stream()
-                        .filter(p -> profJuryCount.getOrDefault(p.getIdp(), 0) <= minLoad + MAX_LOAD_GAP)
-                        .filter(p -> {
-                            String d = p.getDiscipline() != null ? p.getDiscipline().toLowerCase() : "";
-                            String s = p.getSpecialite()  != null ? p.getSpecialite().toLowerCase()  : "";
-                            return d.contains("anglais") || d.contains("english") ||
-                                   s.contains("anglais") || s.contains("english");
-                        })
-                        .filter(p -> fTech == null || !p.getIdp().equals(fTech.getIdp()))
-                        .findFirst().orElse(null);
-            }
-
-            if (techProf != null && englishProf != null) {
-                return new Professeur[]{techProf, englishProf};
-            }
-            if (techProf != null && !needEnglish) {
-                final Professeur fTech2 = techProf; // Effectively final copy
-                // Pick any remaining prof as Rapporteur 2 (le moins chargé grâce au tri)
-                Professeur r2 = available.stream()
-                        .filter(p -> !p.getIdp().equals(fTech2.getIdp()))
-                        .findFirst().orElse(null);
-                if (r2 != null) return new Professeur[]{techProf, r2};
-            }
-            if (techProf == null && englishProf != null) {
-                final Professeur fEng = englishProf; // Effectively final copy
-                // Si pas de prof technique exact mais prof d'anglais dispo, on prend l'anglais + le prof tech le moins chargé
-                Professeur r1 = available.stream()
-                        .filter(p -> !p.getIdp().equals(fEng.getIdp()))
-                        .findFirst().orElse(null);
-                if (r1 != null) return new Professeur[]{r1, englishProf};
-            }
-            // Partial or No NLP match — fall through to classic info-constraint selection
-        }
-
-        // ── Classic fallback: at least 2/3 jury members must be Informatique ──
-        // Case A: encadrant is NOT info → both rapporteurs MUST be info
-        // Case B: encadrant IS info → at least 1 rapporteur must be info
-        for (int i = 0; i < available.size(); i++) {
-            for (int j = i + 1; j < available.size(); j++) {
-                Professeur p1 = available.get(i);
-                Professeur p2 = available.get(j);
-
-                int infoCount = (encadrantIsInfo ? 1 : 0) + (isInfo(p1) ? 1 : 0) + (isInfo(p2) ? 1 : 0);
-                if (infoCount >= 2) {
-                    return new Professeur[]{p1, p2};
-                }
-            }
-        }
-
-        // Fallback: constraint cannot be met (not enough info profs available at this slot).
-        // Accept the best possible pair to avoid leaving a student unscheduled.
-        if (available.size() >= 2) {
-            return new Professeur[]{available.get(0), available.get(1)};
-        }
-        return null;
     }
 
     private int getSlotLoad(String slotKey, List<Salle> salles, Map<String, Boolean> roomBusy) {
         int count = 0;
         for (Salle s : salles) {
-            if (roomBusy.getOrDefault(slotKey + "|" + s.getId_salle(), false)) count++;
+            if (roomBusy.getOrDefault(slotKey + "|" + s.getId_salle(), false)) {
+                count++;
+            }
         }
         return count;
     }
 
     private Salle getFreeRoom(String slotKey, List<Salle> salles, Map<String, Boolean> roomBusy) {
         for (Salle s : salles) {
-            if (!roomBusy.getOrDefault(slotKey + "|" + s.getId_salle(), false)) return s;
+            if (!roomBusy.getOrDefault(slotKey + "|" + s.getId_salle(), false)) {
+                return s;
+            }
         }
         return null;
     }
 
-    private void markProfBusy(Long profId, String dateStr, int slot,
-                               Map<String, Set<Long>> profBusyAtSlot,
-                               Map<Long, List<String>> profSchedule,
-                               Map<Long, Map<String, Integer>> profDailyCount) {
+    private void markProfBusy(Long profId,
+                              String dateStr,
+                              int slot,
+                              Map<String, Set<Long>> profBusyAtSlot,
+                              Map<Long, List<String>> profSchedule,
+                              Map<Long, Map<String, Integer>> profDailyCount) {
         profBusyAtSlot.computeIfAbsent(dateStr + "|" + slot, k -> new HashSet<>()).add(profId);
         profSchedule.computeIfAbsent(profId, k -> new ArrayList<>()).add(dateStr + "|" + slot);
         profDailyCount.get(profId).merge(dateStr, 1, Integer::sum);
     }
 
-    // ── Setup Helpers ────────────────────────────────────────────────────────
-
     private void ensureSallesExistent() {
         if (salleDao.count() == 0) {
             List<Salle> defaults = new ArrayList<>();
-            for (String name : DEFAULT_ROOMS) {
+            for (String name : config.getDefaultRooms()) {
                 Salle s = new Salle();
                 s.setNum_salle(name);
                 s.setBlock("Bloc Principal");
@@ -510,14 +504,14 @@ public class PlanningServiceImpl implements PlanningService {
         List<Professeur> sorted = new ArrayList<>(profs);
         sorted.sort(Comparator.comparing(Professeur::getIdp));
         profColorMap = new LinkedHashMap<>();
-        
-        // Generate distinct colors using the golden ratio conjugate
+
+        List<String> palette = config.getProfessorColorPalette();
         float hue = 0.0f;
         float goldenRatioConjugate = 0.618033988749895f;
-        
+
         for (int i = 0; i < sorted.size(); i++) {
-            if (i < COLOR_PALETTE.length) {
-                profColorMap.put(sorted.get(i).getIdp(), COLOR_PALETTE[i]);
+            if (i < palette.size()) {
+                profColorMap.put(sorted.get(i).getIdp(), palette.get(i));
             } else {
                 hue += goldenRatioConjugate;
                 hue %= 1.0f;
@@ -528,12 +522,34 @@ public class PlanningServiceImpl implements PlanningService {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
+    private void logJuryDistribution(List<String> log,
+                                     List<Professeur> allProfs,
+                                     Map<Long, Integer> profJuryCount) {
+        log.add("--- Repartition des participations jury ---");
+        profJuryCount.entrySet().stream()
+                .sorted(Map.Entry.comparingByValue())
+                .forEach(e -> {
+                    Professeur p = allProfs.stream()
+                            .filter(pr -> pr.getIdp().equals(e.getKey()))
+                            .findFirst()
+                            .orElse(null);
+                    if (p != null) {
+                        log.add("   " + p.getNom() + " " + p.getPrenom() + " -> " + e.getValue() + " fois");
+                    }
+                });
+    }
+
+    private String projectStudentNames(List<Affectation> project) {
+        List<String> names = new ArrayList<>();
+        for (Affectation aff : project) {
+            names.add(aff.getEtudiant().getNomE());
+        }
+        return String.join(" & ", names);
+    }
 
     @Override
     public List<Soutenance> getAllSoutenances() {
         List<Soutenance> list = soutDao.findAllWithDetails();
-        // Sort: date ASC -> slot ASC -> room ASC
         list.sort(Comparator
                 .comparing(Soutenance::getDate)
                 .thenComparingInt(s -> slotOrder(s.getHeure()))
@@ -551,13 +567,40 @@ public class PlanningServiceImpl implements PlanningService {
 
     @Override
     public Map<Long, String> getProfessorColors() {
-        if (profColorMap.isEmpty()) buildColorMap(profDao.findAll());
+        if (profColorMap.isEmpty()) {
+            buildColorMap(profDao.findAll());
+        }
         return profColorMap;
     }
 
     @Override
     public void deletePlanning() {
-        soutDao.deleteAll();
-        juryDao.deleteAll();
+        resetPlanning();
+    }
+
+    private static class PlanningDates {
+        private final List<String> validDates;
+        private final List<Date> validDateObjects;
+
+        private PlanningDates(List<String> validDates, List<Date> validDateObjects) {
+            this.validDates = validDates;
+            this.validDateObjects = validDateObjects;
+        }
+    }
+
+    private static class PlanningChoice {
+        private final int dayIdx;
+        private final int slot;
+        private final Salle salle;
+        private final Professeur rapporteur1;
+        private final Professeur rapporteur2;
+
+        private PlanningChoice(int dayIdx, int slot, Salle salle, Professeur rapporteur1, Professeur rapporteur2) {
+            this.dayIdx = dayIdx;
+            this.slot = slot;
+            this.salle = salle;
+            this.rapporteur1 = rapporteur1;
+            this.rapporteur2 = rapporteur2;
+        }
     }
 }

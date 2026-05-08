@@ -85,7 +85,7 @@ import java.util.zip.ZipOutputStream;
 @MultipartConfig(maxFileSize = 10485760) // 10MB
 public class FrontController extends HttpServlet {
 
-    private services.PfeService service = new services.PfeServiceImpl();
+    private services.PfeService service = services.ServiceFactory.createPfeService();
     private static final String LOGO_FILE_NAME = "t1.png";
     private static final String LOGO_WEB_PATH = "/assets/" + LOGO_FILE_NAME;
 

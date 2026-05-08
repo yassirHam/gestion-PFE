@@ -16,10 +16,9 @@ public class Session {
     private Etudiant etudiant;
 
     @Temporal(TemporalType.DATE)
-    private Date date_soutenance; // La date précise choisie dans la plage
+    private Date date_soutenance;
 
-    private int numeroSession; // 1 pour Juin, 2 pour Juillet
-
+    private int numeroSession; 
     public Session() {}
 
 	public Session(Long id_ses, Etudiant etudiant, Date date_soutenance, int numeroSession) {

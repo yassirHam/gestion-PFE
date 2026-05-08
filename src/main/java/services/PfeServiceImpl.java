@@ -8,6 +8,8 @@ import dao.FichierListeDAO;
 import dao.FichierListeDAOImpl;
 import dao.ProfesseurDAO;
 import dao.ProfesseurDAOImpl;
+import dao.SalleDAO;
+import dao.SalleDAOImpl;
 import entities.Affectation;
 import entities.Etudiant;
 import entities.FichierListe;
@@ -18,11 +20,39 @@ import java.util.*;
 
 public class PfeServiceImpl implements PfeService {
 
-    private final AffectationDAO affDao = new AffectationDAOImpl();
-    private final EtudiantDAO etuDao = new EtudiantDAOImpl();
-    private final ProfesseurDAO profDao = new ProfesseurDAOImpl();
-    private final FichierListeDAO fichierDao = new FichierListeDAOImpl();
-    private final PlanningService planningService = new PlanningServiceImpl();
+    private final AffectationDAO affDao;
+    private final EtudiantDAO etuDao;
+    private final ProfesseurDAO profDao;
+    private final FichierListeDAO fichierDao;
+    private final SalleDAO salleDao;
+    private final PlanningService planningService;
+    private final VerificationService verificationService;
+
+    public PfeServiceImpl() {
+        this(new AffectationDAOImpl(),
+                new EtudiantDAOImpl(),
+                new ProfesseurDAOImpl(),
+                new FichierListeDAOImpl(),
+                new SalleDAOImpl(),
+                ServiceFactory.createPlanningService(),
+                ServiceFactory.createVerificationService());
+    }
+
+    public PfeServiceImpl(AffectationDAO affDao,
+                          EtudiantDAO etuDao,
+                          ProfesseurDAO profDao,
+                          FichierListeDAO fichierDao,
+                          SalleDAO salleDao,
+                          PlanningService planningService,
+                          VerificationService verificationService) {
+        this.affDao = Objects.requireNonNull(affDao);
+        this.etuDao = Objects.requireNonNull(etuDao);
+        this.profDao = Objects.requireNonNull(profDao);
+        this.fichierDao = Objects.requireNonNull(fichierDao);
+        this.salleDao = Objects.requireNonNull(salleDao);
+        this.planningService = Objects.requireNonNull(planningService);
+        this.verificationService = Objects.requireNonNull(verificationService);
+    }
 
     @Override
     public void saveEtudiants(List<Etudiant> etudiants, String filiere, String fileName) {
@@ -318,7 +348,6 @@ public class PfeServiceImpl implements PfeService {
 
     @Override
     public VerificationReport verifierFichiersGeneres(List<String> filieresFiltre) {
-        VerificationService verificationService = new VerificationServiceImpl();
         return verificationService.verifyGeneratedFiles(filieresFiltre);
     }
 
@@ -436,13 +465,11 @@ public class PfeServiceImpl implements PfeService {
 
     @Override
     public List<entities.Salle> getAllSalles() {
-        dao.SalleDAO salleDao = new dao.SalleDAOImpl();
         return salleDao.findAll();
     }
 
     @Override
     public boolean addSalle(String numSalle) {
-        dao.SalleDAO salleDao = new dao.SalleDAOImpl();
         String normalizedNumSalle = normalizeSalleName(numSalle);
         if (normalizedNumSalle.isEmpty()) {
             return false;

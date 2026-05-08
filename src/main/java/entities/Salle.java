@@ -12,7 +12,7 @@ public class Salle {
 
     private String num_salle;
     private String block;
-    private String status; // Ex: "Libre", "Occupée"
+    private String status;
 
     public Salle() {}
 

@@ -5,10 +5,8 @@ package services;
  */
 public class SujetAnalysis {
 
-    /** Spécialité technique la plus proche parmi celles dispo (ex: "Réseaux", "IA", "Web") */
     private final String bestSpecialite;
 
-    /** Langue du sujet : "ag" (anglais) ou "fr" (français) */
     private final String language;
 
     public SujetAnalysis(String bestSpecialite, String language) {

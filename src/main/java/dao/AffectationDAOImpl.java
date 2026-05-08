@@ -48,6 +48,25 @@ public class AffectationDAOImpl implements AffectationDAO {
     }
 
     @Override
+    public void deleteByFilieres(List<String> filieres) {
+        if (filieres == null || filieres.isEmpty()) {
+            return;
+        }
+
+        Transaction tx = null;
+        try (Session session = sf.openSession()) {
+            tx = session.beginTransaction();
+            session.createMutationQuery("delete from Affectation a where a.etudiant.filiere in (:filieres)")
+                    .setParameterList("filieres", filieres)
+                    .executeUpdate();
+            tx.commit();
+        } catch (Exception e) {
+            if (tx != null) tx.rollback();
+            e.printStackTrace();
+        }
+    }
+
+    @Override
     public void deleteAll() {
         Transaction tx = null;
         try (Session session = sf.openSession()) {

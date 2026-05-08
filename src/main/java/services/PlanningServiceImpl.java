@@ -26,23 +26,13 @@ public class PlanningServiceImpl implements PlanningService {
     private Map<Long, String> profColorMap = new LinkedHashMap<>();
 
     public PlanningServiceImpl() {
-        this(new AffectationDAOImpl(),
-                new ProfesseurDAOImpl(),
-                new SalleDAOImpl(),
-                new JuryDAOImpl(),
-                new SoutenanceDAOImpl(),
-                new NlpServiceImpl(),
-                PlanningConfig.defaults(),
+        this(new AffectationDAOImpl(), new ProfesseurDAOImpl(), new SalleDAOImpl(), new JuryDAOImpl(),
+                new SoutenanceDAOImpl(), new NlpServiceImpl(), PlanningConfig.defaults(),
                 new DefaultJurySelectionStrategy());
     }
 
-    public PlanningServiceImpl(AffectationDAO affDao,
-                               ProfesseurDAO profDao,
-                               SalleDAO salleDao,
-                               JuryDAO juryDao,
-                               SoutenanceDAO soutDao,
-                               NlpService nlpService,
-                               PlanningConfig config,
+    public PlanningServiceImpl(AffectationDAO affDao, ProfesseurDAO profDao, SalleDAO salleDao, JuryDAO juryDao,
+                               SoutenanceDAO soutDao, NlpService nlpService, PlanningConfig config,
                                JurySelectionStrategy jurySelectionStrategy) {
         this.affDao = Objects.requireNonNull(affDao);
         this.profDao = Objects.requireNonNull(profDao);
@@ -55,9 +45,7 @@ public class PlanningServiceImpl implements PlanningService {
     }
 
     @Override
-    public List<Soutenance> genererPlanning(List<String> filieres,
-                                            List<String> log,
-                                            List<Long> selectedSalles,
+    public List<Soutenance> genererPlanning(List<String> filieres, List<String> log, List<Long> selectedSalles,
                                             String startDate) {
         List<Affectation> affectations = filterAffectationsByFiliere(affDao.findAllWithDetails(), filieres);
         if (affectations.isEmpty()) {
@@ -109,30 +97,12 @@ public class PlanningServiceImpl implements PlanningService {
             List<Professeur> juryPool = new ArrayList<>(allProfs);
             juryPool.removeIf(p -> p.getIdp().equals(encadrant.getIdp()));
 
-            PlanningChoice bestChoice = findBestPlanningChoice(
-                    encadrant,
-                    juryPool,
-                    planningDates,
-                    slots,
-                    salles,
-                    profBusyAtSlot,
-                    profSchedule,
-                    profJuryCount,
-                    profDailyCount,
-                    roomBusy,
-                    nlpResult);
+            PlanningChoice bestChoice = findBestPlanningChoice( encadrant, juryPool, planningDates, slots, salles,
+                    profBusyAtSlot,profSchedule, profJuryCount, profDailyCount, roomBusy,nlpResult);
 
             if (bestChoice != null) {
-                result.addAll(saveProjectPlanning(
-                        project,
-                        encadrant,
-                        bestChoice,
-                        planningDates,
-                        profBusyAtSlot,
-                        profSchedule,
-                        profDailyCount,
-                        profJuryCount,
-                        roomBusy,
+                result.addAll(saveProjectPlanning( project, encadrant, bestChoice, planningDates, profBusyAtSlot,
+                        profSchedule, profDailyCount, profJuryCount, roomBusy,
                         log));
             } else {
                 log.add("Impossible de planifier: " + projectStudentNames(project)
@@ -251,10 +221,48 @@ public class PlanningServiceImpl implements PlanningService {
                     processedCne.add(partnerAff.getEtudiant().getCne());
                 }
             }
+            normalizeProjectSubject(project);
             projects.add(project);
         }
 
         return projects;
+    }
+
+    private void normalizeProjectSubject(List<Affectation> project) {
+        if (project == null || project.size() < 2) {
+            return;
+        }
+
+        String subject = "";
+        for (Affectation affectation : project) {
+            if (affectation.getEtudiant() == null) {
+                continue;
+            }
+            String candidate = safe(affectation.getEtudiant().getSujet_stage());
+            if (!candidate.isEmpty() && !isDefaultSubject(candidate)) {
+                subject = candidate;
+                break;
+            }
+            if (subject.isEmpty()) {
+                subject = candidate;
+            }
+        }
+
+        if (!subject.isEmpty()) {
+            for (Affectation affectation : project) {
+                if (affectation.getEtudiant() != null) {
+                    affectation.getEtudiant().setSujet_stage(subject);
+                }
+            }
+        }
+    }
+
+    private boolean isDefaultSubject(String subject) {
+        return subject.toLowerCase(Locale.ROOT).contains("projet de fin d");
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.trim();
     }
 
     private Map<String, SujetAnalysis> analyzeProjectSubjects(List<List<Affectation>> projects,

@@ -6,10 +6,14 @@ import dao.EtudiantDAO;
 import dao.EtudiantDAOImpl;
 import dao.FichierListeDAO;
 import dao.FichierListeDAOImpl;
+import dao.JuryDAO;
+import dao.JuryDAOImpl;
 import dao.ProfesseurDAO;
 import dao.ProfesseurDAOImpl;
 import dao.SalleDAO;
 import dao.SalleDAOImpl;
+import dao.SoutenanceDAO;
+import dao.SoutenanceDAOImpl;
 import entities.Affectation;
 import entities.Etudiant;
 import entities.FichierListe;
@@ -25,37 +29,39 @@ public class PfeServiceImpl implements PfeService {
     private final ProfesseurDAO profDao;
     private final FichierListeDAO fichierDao;
     private final SalleDAO salleDao;
+    private final JuryDAO juryDao;
+    private final SoutenanceDAO soutDao;
     private final PlanningService planningService;
     private final VerificationService verificationService;
 
     public PfeServiceImpl() {
-        this(new AffectationDAOImpl(),
-                new EtudiantDAOImpl(),
-                new ProfesseurDAOImpl(),
-                new FichierListeDAOImpl(),
-                new SalleDAOImpl(),
-                ServiceFactory.createPlanningService(),
-                ServiceFactory.createVerificationService());
+        this(new AffectationDAOImpl(), new EtudiantDAOImpl(), new ProfesseurDAOImpl(), new FichierListeDAOImpl(),
+                new SalleDAOImpl(), ServiceFactory.createPlanningService(), ServiceFactory.createVerificationService());
     }
 
-    public PfeServiceImpl(AffectationDAO affDao,
-                          EtudiantDAO etuDao,
-                          ProfesseurDAO profDao,
-                          FichierListeDAO fichierDao,
-                          SalleDAO salleDao,
-                          PlanningService planningService,
-                          VerificationService verificationService) {
+    public PfeServiceImpl(AffectationDAO affDao, EtudiantDAO etuDao, ProfesseurDAO profDao, FichierListeDAO fichierDao,
+                          SalleDAO salleDao, PlanningService planningService, VerificationService verificationService) {
+        this(affDao, etuDao, profDao, fichierDao, salleDao, new JuryDAOImpl(), new SoutenanceDAOImpl(),
+                planningService, verificationService);
+    }
+
+    public PfeServiceImpl(AffectationDAO affDao, EtudiantDAO etuDao, ProfesseurDAO profDao, FichierListeDAO fichierDao,
+                          SalleDAO salleDao, JuryDAO juryDao, SoutenanceDAO soutDao,
+                          PlanningService planningService, VerificationService verificationService) {
         this.affDao = Objects.requireNonNull(affDao);
         this.etuDao = Objects.requireNonNull(etuDao);
         this.profDao = Objects.requireNonNull(profDao);
         this.fichierDao = Objects.requireNonNull(fichierDao);
         this.salleDao = Objects.requireNonNull(salleDao);
+        this.juryDao = Objects.requireNonNull(juryDao);
+        this.soutDao = Objects.requireNonNull(soutDao);
         this.planningService = Objects.requireNonNull(planningService);
         this.verificationService = Objects.requireNonNull(verificationService);
     }
 
     @Override
     public void saveEtudiants(List<Etudiant> etudiants, String filiere, String fileName) {
+        normalizeBinomeSubjects(etudiants);
         etuDao.deleteByFiliere(filiere);
         etuDao.saveAll(etudiants);
         fichierDao.deleteByFiliere(filiere);
@@ -64,17 +70,6 @@ public class PfeServiceImpl implements PfeService {
 
     @Override
     public void deleteEtudiantsByFiliere(String filiere) {
-        // Must delete planning data first to avoid FK constraint violations and stale data
-        try (org.hibernate.Session session = util.HibernateUtil.getSessionFactory().openSession()) {
-            org.hibernate.Transaction tx = session.beginTransaction();
-            session.createMutationQuery("delete from Soutenance s where s.etudiant.filiere = :filiere")
-                   .setParameter("filiere", filiere)
-                   .executeUpdate();
-            session.createMutationQuery("delete from Affectation a where a.etudiant.filiere = :filiere")
-                   .setParameter("filiere", filiere)
-                   .executeUpdate();
-            tx.commit();
-        }
         etuDao.deleteByFiliere(filiere);
         fichierDao.deleteByFiliere(filiere);
     }
@@ -86,14 +81,9 @@ public class PfeServiceImpl implements PfeService {
 
     @Override
     public void deleteAffectationsAndProfesseurs() {
-        // Delete soutenances first to avoid FK violations and stale data
-        try (org.hibernate.Session session = util.HibernateUtil.getSessionFactory().openSession()) {
-            org.hibernate.Transaction tx = session.beginTransaction();
-            session.createMutationQuery("delete from Soutenance").executeUpdate();
-            session.createMutationQuery("delete from Affectation").executeUpdate();
-            session.createMutationQuery("delete from Jury").executeUpdate();
-            tx.commit();
-        }
+        soutDao.deleteAll();
+        affDao.deleteAll();
+        juryDao.deleteAll();
         profDao.deleteAll();
     }
 
@@ -153,21 +143,10 @@ public class PfeServiceImpl implements PfeService {
             return;
         }
 
-        try (org.hibernate.Session session = util.HibernateUtil.getSessionFactory().openSession()) {
-            org.hibernate.Transaction tx = session.beginTransaction();
-            // First, delete related Soutenances to prevent stale planning data
-            session.createMutationQuery("delete from Soutenance s where s.etudiant.filiere in (:filieres)")
-                   .setParameterList("filieres", filieres)
-                   .executeUpdate();
-                   
-            // Then delete Affectations
-            session.createMutationQuery("delete from Affectation a where a.etudiant.filiere in (:filieres)")
-                   .setParameterList("filieres", filieres)
-                   .executeUpdate();
-            tx.commit();
-        }
+        soutDao.deleteByFilieres(filieres);
+        affDao.deleteByFilieres(filieres);
+        normalizeBinomeSubjects(etudiants);
 
-        // 1. Grouper les étudiants par filière en PROJETS (1 ou 2 étudiants)
         Map<String, List<List<Etudiant>>> projectsByFiliere = new LinkedHashMap<>();
         
         Map<String, Etudiant> etuByCne = new HashMap<>();
@@ -192,13 +171,11 @@ public class PfeServiceImpl implements PfeService {
             projectsByFiliere.computeIfAbsent(e.getFiliere(), k -> new ArrayList<>()).add(project);
         }
 
-        // 2. Mélanger chaque groupe filière séparément
         Random rnd = new Random();
         for (List<List<Etudiant>> group : projectsByFiliere.values()) {
             Collections.shuffle(group, rnd);
         }
 
-        // 3. Interleaver : 1 projet de chaque filière en rotation → liste mixte
         List<List<Etudiant>> mixedProjects = new ArrayList<>();
         List<List<List<Etudiant>>> groups = new ArrayList<>(projectsByFiliere.values());
         boolean added = true;
@@ -212,7 +189,6 @@ public class PfeServiceImpl implements PfeService {
             }
         }
 
-        // 4. Mélanger les profs et distribuer en round-robin
         List<Professeur> shuffledProfs = new ArrayList<>(profs);
         Collections.shuffle(shuffledProfs, rnd);
 
@@ -343,7 +319,6 @@ public class PfeServiceImpl implements PfeService {
         List<Affectation> allAff = affDao.findAllWithDetails();
         List<Soutenance> allSout = planningService.getAllSoutenances();
 
-        // Chercher un étudiant en premier
         for (Affectation a : allAff) {
             Etudiant e = a.getEtudiant();
             if (e != null) {
@@ -356,7 +331,6 @@ public class PfeServiceImpl implements PfeService {
                     result.put("searchType", "ETUDIANT");
                     result.put("etu", e);
                     result.put("affectation", a);
-                    // Trouver la soutenance
                     for (Soutenance s : allSout) {
                         if (s.getEtudiant() != null && s.getEtudiant().getIde().equals(e.getIde())) {
                             result.put("soutenance", s);
@@ -368,7 +342,6 @@ public class PfeServiceImpl implements PfeService {
             }
         }
 
-        // Sinon chercher un professeur
         for (Professeur p : profDao.findAll()) {
             String nom = p.getNom() != null ? p.getNom().toLowerCase() : "";
             String prenom = p.getPrenom() != null ? p.getPrenom().toLowerCase() : "";
@@ -392,7 +365,6 @@ public class PfeServiceImpl implements PfeService {
                 for (Soutenance s : allSout) {
                     if (s.getEtudiant() == null) continue;
                     
-                    // Trouver l'encadrant via les affectations
                     boolean isEnc = false;
                     for(Affectation a : allAff) {
                         if (a.getEtudiant().getIde().equals(s.getEtudiant().getIde()) && 
@@ -477,5 +449,67 @@ public class PfeServiceImpl implements PfeService {
         normalized = normalized.replaceFirst("^SALLE\\s*", "S");
         normalized = normalized.replaceFirst("^S\\s+(\\d)", "S$1");
         return normalized;
+    }
+
+    private void normalizeBinomeSubjects(List<Etudiant> etudiants) {
+        if (etudiants == null || etudiants.isEmpty()) {
+            return;
+        }
+
+        Map<String, Etudiant> etuByCne = new HashMap<>();
+        for (Etudiant e : etudiants) {
+            String cne = safe(e.getCne());
+            if (!cne.isEmpty()) {
+                etuByCne.put(cne, e);
+            }
+        }
+
+        Set<String> processedPairs = new HashSet<>();
+        for (Etudiant e : etudiants) {
+            String cne = safe(e.getCne());
+            String binomeCne = safe(e.getBinome_cne());
+            if (cne.isEmpty() || binomeCne.isEmpty()) {
+                continue;
+            }
+
+            Etudiant partner = etuByCne.get(binomeCne);
+            if (partner == null) {
+                continue;
+            }
+
+            String pairKey = cne.compareTo(binomeCne) <= 0 ? cne + "|" + binomeCne : binomeCne + "|" + cne;
+            if (!processedPairs.add(pairKey)) {
+                continue;
+            }
+
+            String commonSubject = chooseProjectSubject(e, partner);
+            if (!commonSubject.isEmpty()) {
+                e.setSujet_stage(commonSubject);
+                partner.setSujet_stage(commonSubject);
+            }
+        }
+    }
+
+    private String chooseProjectSubject(Etudiant first, Etudiant second) {
+        String firstSubject = safe(first.getSujet_stage());
+        String secondSubject = safe(second.getSujet_stage());
+        if (!firstSubject.isEmpty() && !isDefaultSubject(firstSubject)) {
+            return firstSubject;
+        }
+        if (!secondSubject.isEmpty() && !isDefaultSubject(secondSubject)) {
+            return secondSubject;
+        }
+        if (!firstSubject.isEmpty()) {
+            return firstSubject;
+        }
+        return secondSubject;
+    }
+
+    private boolean isDefaultSubject(String subject) {
+        return subject.toLowerCase(Locale.ROOT).contains("projet de fin d");
+    }
+
+    private String safe(String value) {
+        return value == null ? "" : value.trim();
     }
 }

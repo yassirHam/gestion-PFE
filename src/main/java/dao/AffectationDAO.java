@@ -7,5 +7,6 @@ public interface AffectationDAO {
     void saveAll(List<Affectation> affectations);
     List<Affectation> findAll();
     List<Affectation> findAllWithDetails();
+    void deleteByFilieres(List<String> filieres);
     void deleteAll();
 }

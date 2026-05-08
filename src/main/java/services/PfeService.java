@@ -11,43 +11,39 @@ import java.util.Map;
 
 public interface PfeService {
     
-    // Etudiant operations
+    // Etudiant 
     void saveEtudiants(List<Etudiant> etudiants, String filiere, String fileName);
     void deleteEtudiantsByFiliere(String filiere);
 
-    // Professeur operations
+    // Professeur 
     void saveProfesseurs(List<Professeur> profs);
     void deleteAffectationsAndProfesseurs();
 
-    // Affectation operations
+    // Affectation 
     List<Affectation> getAllAffectationsWithDetails();
     void lancerAffectationGlobale(List<String> filieres, List<String> debugLog);
     void restoreAffectation(java.io.File backupFile) throws java.io.IOException;
     
-    // Fichier operations
+    // Fichier 
     List<FichierListe> getAllFichiers();
 
-    // Dashboard operations
+    // Dashboard 
     Map<String, Integer> getEtudiantsParProf(List<String> filieresFiltre);
     Map<String, Integer> getEtudiantsParFiliere(List<String> filieresFiltre);
     int getTotalEtudiantsAffectes(List<String> filieresFiltre);
     int getTotalProfesseursEncadrants(List<String> filieresFiltre);
-    
-    // New Dashboard stats for Soutenances
     Map<String, Integer> getSoutenancesParProf(List<String> filieresFiltre);
     int getTotalSoutenances(List<String> filieresFiltre);
     VerificationReport verifierFichiersGeneres(List<String> filieresFiltre);
-
-    // Search operations
     Map<String, Object> searchDashboard(String query);
 
-    // Planning operations
+    // Planning 
     List<Soutenance> genererPlanning(List<String> filieres, List<String> debugLog, List<Long> selectedSalles, String startDate);
     List<Soutenance> getAllSoutenances();
     Map<Long, String> getProfessorColors();
     void deletePlanning();
 
-    // Salles operations
+    // Salles
     List<entities.Salle> getAllSalles();
     boolean addSalle(String numSalle);
 }

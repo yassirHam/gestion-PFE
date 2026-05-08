@@ -70,7 +70,7 @@ public class NlpServiceImpl implements NlpService {
             return results;
         }
         
-        LOG.info("Batch NLP analysis pour " + sujetsToAnalyze.size() + " sujets inÃ©dits en UNE SEULE requete...");
+        LOG.info("Batch NLP analysis pour " + sujetsToAnalyze.size() + " sujets en UNE SEULE requete...");
         
         String specialitesStr = String.join(", ", specialitesDispos);
         

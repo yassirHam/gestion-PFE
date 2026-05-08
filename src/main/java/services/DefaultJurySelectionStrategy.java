@@ -65,23 +65,19 @@ public class DefaultJurySelectionStrategy implements JurySelectionStrategy {
                     .findFirst()
                     .orElse(null);
         }
-
         if (techProf != null && englishProf != null) {
             return new Professeur[]{techProf, englishProf};
         }
         if (techProf != null && !needEnglish) {
             Professeur r2 = candidates.stream()
-                    .filter(p -> !p.getIdp().equals(techProf.getIdp()))
-                    .findFirst()
-                    .orElse(null);
+                    .filter(p -> !p.getIdp().equals(techProf.getIdp())).findFirst().orElse(null);
             if (r2 != null) {
                 return new Professeur[]{techProf, r2};
             }
         }
         if (techProf == null && englishProf != null) {
             final Professeur selectedEnglishProf = englishProf;
-            Professeur r1 = candidates.stream()
-                    .filter(p -> !p.getIdp().equals(selectedEnglishProf.getIdp()))
+            Professeur r1 = candidates.stream().filter(p -> !p.getIdp().equals(selectedEnglishProf.getIdp()))
                     .findFirst()
                     .orElse(null);
             if (r1 != null) {

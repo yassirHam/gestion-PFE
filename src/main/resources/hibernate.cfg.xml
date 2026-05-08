@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 
 
 <hibernate-configuration>
@@ -12,14 +12,7 @@
 
         <!-- ===== Dialecte Hibernate 6 ===== -->
         <property name="hibernate.dialect">org.hibernate.dialect.MySQLDialect</property>
-
-        <!-- ========================================================= -->
-        <!-- ✅  FIX PRINCIPAL : "update" ne supprime JAMAIS les tables -->
-        <!--     Le log montrait DROP TABLE car Hibernate détectait      -->
-        <!--     un conflit de schéma. La vraie cause était l'entité     -->
-        <!--     Session.java dont le nom "Session" est réservé en SQL. -->
-        <!--     → voir entité Session.java corrigée ci-dessous          -->
-        <!-- ========================================================= -->
+        <!-- Hibernate met a jour le schema sans supprimer les tables. -->
         <property name="hibernate.hbm2ddl.auto">update</property>
 
         <!-- ===== Logs SQL (mettre false en prod) ===== -->
@@ -36,8 +29,6 @@
         <mapping class="entities.Professeur"/>
         <mapping class="entities.Affectation"/>
         <mapping class="entities.FichierListe"/>
-        
-        
         <mapping class="entities.Soutenance"/>
         <mapping class="entities.Salle"/>
         <mapping class="entities.Jury"/>

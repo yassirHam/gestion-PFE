@@ -54,7 +54,6 @@ projet/
       Jury.java
       Professeur.java
       Salle.java
-      Session.java
       Soutenance.java
     services/
       AffectationService*.java
@@ -426,4 +425,3 @@ The duplicate guard prevents new duplicates from being inserted. If duplicates a
 - Add user-facing success messages after adding a new salle.
 - Add authentication if the app is used by multiple roles.
 - Externalize database credentials with environment variables.
-

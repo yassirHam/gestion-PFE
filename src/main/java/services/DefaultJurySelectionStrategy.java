@@ -12,20 +12,14 @@ import java.util.Map;
 public class DefaultJurySelectionStrategy implements JurySelectionStrategy {
 
     @Override
-    public Professeur[] selectJury(Professeur encadrant,
-                                   List<Professeur> available,
-                                   Map<Long, Integer> profJuryCount,
-                                   SujetAnalysis nlp,
-                                   PlanningConfig config) {
+    public Professeur[] selectJury(Professeur encadrant, List<Professeur> available, Map<Long, Integer> profJuryCount,
+                                   SujetAnalysis nlp, PlanningConfig config) {
         List<Professeur> candidates = new ArrayList<>(available);
         boolean encadrantIsInfo = isInfo(encadrant);
-
         Collections.shuffle(candidates);
         candidates.sort(Comparator.comparingInt((Professeur p) -> profJuryCount.getOrDefault(p.getIdp(), 0)));
-
         int minLoad = candidates.isEmpty() ? 0 : profJuryCount.getOrDefault(candidates.get(0).getIdp(), 0);
         int maxLoadGap = config.getMaxJuryLoadGap();
-
         if (nlp != null) {
             Professeur[] nlpJury = selectNlpAwareJury(candidates, profJuryCount, minLoad, maxLoadGap, nlp);
             if (nlpJury != null) {
@@ -37,7 +31,6 @@ public class DefaultJurySelectionStrategy implements JurySelectionStrategy {
             for (int j = i + 1; j < candidates.size(); j++) {
                 Professeur p1 = candidates.get(i);
                 Professeur p2 = candidates.get(j);
-
                 int infoCount = (encadrantIsInfo ? 1 : 0) + (isInfo(p1) ? 1 : 0) + (isInfo(p2) ? 1 : 0);
                 if (infoCount >= 2) {
                     return new Professeur[]{p1, p2};
@@ -51,11 +44,8 @@ public class DefaultJurySelectionStrategy implements JurySelectionStrategy {
         return null;
     }
 
-    private Professeur[] selectNlpAwareJury(List<Professeur> candidates,
-                                            Map<Long, Integer> profJuryCount,
-                                            int minLoad,
-                                            int maxLoadGap,
-                                            SujetAnalysis nlp) {
+    private Professeur[] selectNlpAwareJury(List<Professeur> candidates, Map<Long, Integer> profJuryCount, int minLoad,
+                                            int maxLoadGap, SujetAnalysis nlp) {
         String targetSpec = nlp.getBestSpecialite();
         boolean needEnglish = nlp.isEnglish();
 
@@ -106,10 +96,8 @@ public class DefaultJurySelectionStrategy implements JurySelectionStrategy {
     }
 
     private boolean isEnglish(Professeur p) {
-        return containsIgnoreCase(p.getDiscipline(), "anglais")
-                || containsIgnoreCase(p.getDiscipline(), "english")
-                || containsIgnoreCase(p.getSpecialite(), "anglais")
-                || containsIgnoreCase(p.getSpecialite(), "english");
+        return containsIgnoreCase(p.getDiscipline(), "anglais") || containsIgnoreCase(p.getDiscipline(), "english")
+                || containsIgnoreCase(p.getSpecialite(), "anglais") || containsIgnoreCase(p.getSpecialite(), "english");
     }
 
     private boolean containsIgnoreCase(String value, String expected) {

@@ -342,25 +342,6 @@ public class VerificationServiceImpl implements VerificationService {
         }
     }
 
-    private List<String> buildNlpInput(VerificationReport report) {
-        List<String> lines = new ArrayList<>();
-        lines.add("Moyenne d'encadrement: " + String.format(java.util.Locale.US, "%.2f", report.getEncadrementAverage())
-                + " (attendu " + report.getEncadrementMinExpected() + "-" + report.getEncadrementMaxExpected() + ")");
-        if (report.getIssues().isEmpty()) {
-            lines.add("Aucune anomalie detectee.");
-            return lines;
-        }
-        int limit = Math.min(12, report.getIssues().size());
-        for (int i = 0; i < limit; i++) {
-            VerificationIssue issue = report.getIssues().get(i);
-            lines.add(issue.getSeverity() + " | " + issue.getCategory() + " | " + issue.getTitle() + " | " + issue.getDetail());
-        }
-        if (report.getIssues().size() > limit) {
-            lines.add("+" + (report.getIssues().size() - limit) + " autres anomalies.");
-        }
-        return lines;
-    }
-
     private String buildLocalSummary(VerificationReport report) {
         if (report.getCriticalCount() > 0) {
             return "Des anomalies critiques ont ete detectees. Corrigez d'abord les conflits de salles, de professeurs ou les donnees manquantes avant d'utiliser le planning.";

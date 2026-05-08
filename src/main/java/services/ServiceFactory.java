@@ -16,33 +16,17 @@ public final class ServiceFactory {
     public static PfeService createPfeService() {
         PlanningService planningService = createPlanningService();
         VerificationService verificationService = createVerificationService();
-
-        return new PfeServiceImpl(
-                new AffectationDAOImpl(),
-                new EtudiantDAOImpl(),
-                new ProfesseurDAOImpl(),
-                new FichierListeDAOImpl(),
-                new SalleDAOImpl(),
-                planningService,
-                verificationService);
+        return new PfeServiceImpl(new AffectationDAOImpl(), new EtudiantDAOImpl(), new ProfesseurDAOImpl(),
+                new FichierListeDAOImpl(), new SalleDAOImpl(), planningService, verificationService);
     }
 
     public static PlanningService createPlanningService() {
-        return new PlanningServiceImpl(
-                new AffectationDAOImpl(),
-                new ProfesseurDAOImpl(),
-                new SalleDAOImpl(),
-                new JuryDAOImpl(),
-                new SoutenanceDAOImpl(),
-                new NlpServiceImpl(),
-                PlanningConfig.defaults(),
+        return new PlanningServiceImpl( new AffectationDAOImpl(), new ProfesseurDAOImpl(), new SalleDAOImpl(),
+                new JuryDAOImpl(), new SoutenanceDAOImpl(), new NlpServiceImpl(), PlanningConfig.defaults(),
                 new DefaultJurySelectionStrategy());
     }
 
     public static VerificationService createVerificationService() {
-        return new VerificationServiceImpl(
-                new AffectationDAOImpl(),
-                new ProfesseurDAOImpl(),
-                new SoutenanceDAOImpl());
+        return new VerificationServiceImpl( new AffectationDAOImpl(), new ProfesseurDAOImpl(), new SoutenanceDAOImpl());
     }
 }

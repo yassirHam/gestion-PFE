@@ -33,15 +33,6 @@ public class FichierListeDAOImpl implements FichierListeDAO {
     }
 
     @Override
-    public FichierListe findByFiliere(String filiere) {
-        try (Session session = sf.openSession()) {
-            return session.createQuery(
-                "from FichierListe where filiere = :f", FichierListe.class)
-                .setParameter("f", filiere).uniqueResult();
-        }
-    }
-
-    @Override
     public void deleteByFiliere(String filiere) {
         Transaction tx = null;
         try (Session session = sf.openSession()) {
@@ -55,19 +46,4 @@ public class FichierListeDAOImpl implements FichierListeDAO {
         }
     }
 
-    @Override
-    public void deleteById(Long id) {
-        Transaction tx = null;
-        try (Session session = sf.openSession()) {
-            tx = session.beginTransaction();
-            session.createMutationQuery("delete from FichierListe where id = :id")
-                   .setParameter("id", id).executeUpdate();
-            tx.commit();
-        } catch (Exception e) {
-            if (tx != null) tx.rollback();
-            e.printStackTrace();
-        }
-    }
-    
-    
 }

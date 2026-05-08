@@ -17,13 +17,8 @@ public class PlanningConfig {
 
     public static PlanningConfig defaults() {
         return new PlanningConfig(
-                new int[]{9, 10, 11, 14, 15, 16, 17},
-                2026,
-                Calendar.JUNE,
-                23,
-                4,
-                List.of("S4A", "S5A", "S16A", "S17A", "AMPHI A"),
-                List.of(
+                new int[]{9, 10, 11, 14, 15, 16, 17}, 2026, Calendar.JUNE, 23, 4,
+                List.of("S4A", "S5A", "S16A", "S17A", "AMPHI A"), List.of(
                         "E74C3C", "3498DB", "2ECC71", "F39C12", "9B59B6",
                         "1ABC9C", "E67E22", "2980B9", "27AE60", "8E44AD",
                         "C0392B", "16A085", "D35400", "2C3E50", "F1C40F",
@@ -33,14 +28,9 @@ public class PlanningConfig {
         );
     }
 
-    public PlanningConfig(int[] slots,
-                          int defaultStartYear,
-                          int defaultStartMonth,
-                          int defaultStartDay,
-                          int maxDays,
-                          List<String> defaultRooms,
-                          List<String> professorColorPalette,
-                          int maxJuryLoadGap) {
+    public PlanningConfig(int[] slots, int defaultStartYear, int defaultStartMonth, int defaultStartDay, int maxDays,
+                          List<String> defaultRooms, List<String> professorColorPalette, int maxJuryLoadGap)
+    {
         this.slots = Arrays.copyOf(slots, slots.length);
         this.defaultStartYear = defaultStartYear;
         this.defaultStartMonth = defaultStartMonth;

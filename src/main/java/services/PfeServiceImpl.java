@@ -80,18 +80,8 @@ public class PfeServiceImpl implements PfeService {
     }
 
     @Override
-    public List<Etudiant> getEtudiantsByFilieres(List<String> filieres) {
-        return etuDao.findByFilieres(filieres);
-    }
-
-    @Override
     public void saveProfesseurs(List<Professeur> profs) {
         profDao.saveAll(profs);
-    }
-
-    @Override
-    public List<Professeur> getAllProfesseurs() {
-        return profDao.findAll();
     }
 
     @Override
@@ -110,11 +100,6 @@ public class PfeServiceImpl implements PfeService {
     @Override
     public List<Affectation> getAllAffectationsWithDetails() {
         return affDao.findAllWithDetails();
-    }
-
-    @Override
-    public void deleteAllAffectations() {
-        affDao.deleteAll();
     }
 
     @Override
@@ -249,11 +234,6 @@ public class PfeServiceImpl implements PfeService {
     @Override
     public List<FichierListe> getAllFichiers() {
         return fichierDao.findAll();
-    }
-
-    @Override
-    public void deleteFichierByFiliere(String filiere) {
-        fichierDao.deleteByFiliere(filiere);
     }
 
     @Override

@@ -41,7 +41,7 @@
         <mapping class="entities.Soutenance"/>
         <mapping class="entities.Salle"/>
         <mapping class="entities.Jury"/>
-        <mapping class="entities.Session"/>
+
 
     </session-factory>
 </hibernate-configuration>

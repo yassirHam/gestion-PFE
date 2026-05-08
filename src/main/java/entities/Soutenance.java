@@ -21,7 +21,7 @@ public class Soutenance {
     @JoinColumn(name = "id_salle")
     private Salle salle;
 
-    @OneToOne
+    @OneToOne	
     @JoinColumn(name = "ide")
     private Etudiant etudiant;
 

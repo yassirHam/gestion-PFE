@@ -448,6 +448,8 @@ public class PfeServiceImpl implements PfeService {
         String normalized = numSalle.trim().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
         normalized = normalized.replaceFirst("^SALLE\\s*", "S");
         normalized = normalized.replaceFirst("^S\\s+(\\d)", "S$1");
+        normalized = normalized.replaceFirst("^ANCIEN\\s+BLOC\\s*", "AB");
+        normalized = normalized.replaceFirst("^NOUVEAU\\s+BLOC\\s*", "NB");
         return normalized;
     }
 

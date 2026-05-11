@@ -447,7 +447,7 @@ public class FrontController extends HttpServlet {
 
             String fileName = part.getSubmittedFileName();
             String filiere  = extractFiliere(fileName);
-            debug.add("📂 Fichier reçu: " + fileName + " → Filière: " + filiere);
+            debug.add("Fichier reçu: " + fileName + " → Filière: " + filiere);
 
             try {
                 List<Etudiant> list = ExcelImporter.importEtudiants(part.getInputStream(), filiere);
@@ -481,7 +481,6 @@ public class FrontController extends HttpServlet {
         if (lower.equals("gi") || lower.contains("génie info") || lower.contains("genie info")) return "GI";
         if (lower.equals("id") || lower.contains("ingénierie") || lower.contains("ingenierie")) return "ID";
         if (lower.contains("tdia") || lower.contains("intelligence artificielle") || lower.contains("transformation digitale")) return "TDIA";
-        if (lower.equals("gc") || lower.contains("génie civil") || lower.contains("genie civil")) return "GC";
         return base.toUpperCase().replaceAll("[^A-Z0-9]", "_");
     }
 
@@ -498,11 +497,11 @@ public class FrontController extends HttpServlet {
 
         try {
             List<Professeur> list = ExcelImporter.importProfs(file.getInputStream());
-            
-            service.deleteAffectationsAndProfesseurs();
+            // On ne supprime plus tout (Upsert strategy pour préserver les historiques)
+            // service.deleteAffectationsAndProfesseurs();
             service.saveProfesseurs(list);
             
-            debug.add(list.size() + " professeurs importés avec succès !");
+            debug.add(list.size() + " professeurs traités (Mise à jour / Ajout) avec succès ! Les affectations existantes sont préservées.");
 
         } catch (Exception e) {
             debug.add("Erreur: " + e.getMessage());
@@ -512,7 +511,7 @@ public class FrontController extends HttpServlet {
         req.setAttribute("debug", debug);
         req.setAttribute("message", "Profs importés ");
         req.setAttribute("fichiers", service.getAllFichiers());
-        req.getRequestDispatcher("affectation.jsp").forward(req, resp);
+        resp.sendRedirect("affectation.do");
     }
 
     private void doSupprimerListes(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -538,7 +537,7 @@ public class FrontController extends HttpServlet {
         List<String> debug = new ArrayList<>();
 
         if (selected == null || selected.length == 0) {
-            debug.add("⚠️ Sélectionnez au moins une filière");
+            debug.add(" Sélectionnez au moins une filière");
             req.setAttribute("fichiers", service.getAllFichiers());
             req.setAttribute("debug", debug);
             req.getRequestDispatcher("affectation.jsp").forward(req, resp);

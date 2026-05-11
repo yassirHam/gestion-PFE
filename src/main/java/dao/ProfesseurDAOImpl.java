@@ -31,7 +31,7 @@ public class ProfesseurDAOImpl implements ProfesseurDAO{
         Transaction tx = session.beginTransaction();
 
         for (Professeur p : list) {
-            session.persist(p);
+            session.merge(p);
         }
 
         tx.commit();

@@ -76,7 +76,30 @@ public class PfeServiceImpl implements PfeService {
 
     @Override
     public void saveProfesseurs(List<Professeur> profs) {
-        profDao.saveAll(profs);
+        List<Professeur> existants = profDao.findAll();
+        List<Professeur> aSauvegarder = new ArrayList<>();
+        
+        for (Professeur nouveau : profs) {
+            Professeur profExistant = null;
+            for (Professeur p : existants) {
+                if (p.getNom().equalsIgnoreCase(nouveau.getNom()) && p.getPrenom().equalsIgnoreCase(nouveau.getPrenom())) {
+                    profExistant = p;
+                    break;
+                }
+            }
+            
+            if (profExistant != null) {
+                // Upsert: Mettre à jour les spécialités sans changer l'ID (idp)
+                profExistant.setDiscipline(nouveau.getDiscipline());
+                profExistant.setSpecialite(nouveau.getSpecialite());
+                aSauvegarder.add(profExistant);
+            } else {
+                // Nouveau professeur
+                aSauvegarder.add(nouveau);
+            }
+        }
+        
+        profDao.saveAll(aSauvegarder);
     }
 
     @Override
@@ -98,11 +121,13 @@ public class PfeServiceImpl implements PfeService {
         
         java.util.List<Etudiant> allEtu = etuDao.findAll();
         java.util.Map<Long, Etudiant> etuMap = new java.util.HashMap<>();
-        for (Etudiant e : allEtu) etuMap.put(e.getIde(), e);
+        for (Etudiant e : allEtu) 
+        	etuMap.put(e.getIde(), e);
         
         java.util.List<Professeur> allProf = profDao.findAll();
         java.util.Map<Long, Professeur> profMap = new java.util.HashMap<>();
-        for (Professeur p : allProf) profMap.put(p.getIdp(), p);
+        for (Professeur p : allProf) 
+        	profMap.put(p.getIdp(), p);
         
         java.util.List<Affectation> toSave = new java.util.ArrayList<>();
         
@@ -124,7 +149,6 @@ public class PfeServiceImpl implements PfeService {
                         toSave.add(a);
                     }
                 } catch (Exception e) {
-                    // Ignore corrupted line
                 }
             }
         }
@@ -150,7 +174,8 @@ public class PfeServiceImpl implements PfeService {
         Map<String, List<List<Etudiant>>> projectsByFiliere = new LinkedHashMap<>();
         
         Map<String, Etudiant> etuByCne = new HashMap<>();
-        for (Etudiant e : etudiants) etuByCne.put(e.getCne(), e);
+        for (Etudiant e : etudiants) 
+        	etuByCne.put(e.getCne(), e);
         
         Set<String> processedCne = new HashSet<>();
         

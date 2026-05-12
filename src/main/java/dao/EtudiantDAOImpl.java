@@ -35,7 +35,7 @@ public class EtudiantDAOImpl implements EtudiantDAO {
         try (Session session = sf.openSession()) {
             tx = session.beginTransaction();
             for (Etudiant e : list) {
-                session.persist(e);
+                session.merge(e);
             }
             tx.commit();
         } catch (Exception e) {

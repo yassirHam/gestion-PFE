@@ -20,7 +20,6 @@ public class SoutenanceDAOImpl implements SoutenanceDAO {
         try (Session session = sf.openSession()) {
             tx = session.beginTransaction();
             for (Soutenance s : soutenances) {
-                normalizeBinomeSubject(session, s);
                 // merge() handles detached associations (Jury, Salle, Etudiant)
                 // that were loaded/saved in different sessions
                 session.merge(s);
@@ -32,51 +31,7 @@ public class SoutenanceDAOImpl implements SoutenanceDAO {
         }
     }
 
-    private void normalizeBinomeSubject(Session session, Soutenance soutenance) {
-        Etudiant etudiant = soutenance.getEtudiant();
-        if (etudiant == null || !etudiant.hasBinome()) {
-            return;
-        }
 
-        Etudiant managedEtudiant = etudiant.getIde() != null ? session.get(Etudiant.class, etudiant.getIde()) : null;
-        Etudiant partner = session.createQuery("from Etudiant where cne = :cne", Etudiant.class)
-                .setParameter("cne", etudiant.getBinome_cne())
-                .uniqueResult();
-
-        if (managedEtudiant == null || partner == null) {
-            return;
-        }
-
-        String commonSubject = chooseProjectSubject(managedEtudiant, partner);
-        if (!commonSubject.isEmpty()) {
-            managedEtudiant.setSujet_stage(commonSubject);
-            partner.setSujet_stage(commonSubject);
-            etudiant.setSujet_stage(commonSubject);
-        }
-    }
-
-    private String chooseProjectSubject(Etudiant first, Etudiant second) {
-        String firstSubject = safe(first.getSujet_stage());
-        String secondSubject = safe(second.getSujet_stage());
-        if (!firstSubject.isEmpty() && !isDefaultSubject(firstSubject)) {
-            return firstSubject;
-        }
-        if (!secondSubject.isEmpty() && !isDefaultSubject(secondSubject)) {
-            return secondSubject;
-        }
-        if (!firstSubject.isEmpty()) {
-            return firstSubject;
-        }
-        return secondSubject;
-    }
-
-    private boolean isDefaultSubject(String subject) {
-        return subject.toLowerCase(Locale.ROOT).contains("projet de fin d");
-    }
-
-    private String safe(String value) {
-        return value == null ? "" : value.trim();
-    }
 
     @Override
     public List<Soutenance> findAllWithDetails() {

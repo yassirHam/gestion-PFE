@@ -85,9 +85,40 @@ import java.util.zip.ZipOutputStream;
 @MultipartConfig(maxFileSize = 10485760) // 10MB
 public class FrontController extends HttpServlet {
 
+    // --------------------------------------------------------------------------
+    //  CONFIGURATION
+    // --------------------------------------------------------------------------
+
     private services.PfeService service = services.ServiceFactory.createPfeService();
     private static final String LOGO_FILE_NAME = "t1.png";
     private static final String LOGO_WEB_PATH = "/assets/" + LOGO_FILE_NAME;
+
+    private static final DeviceRgb COLOR_HEADER                = new DeviceRgb(0.000f, 0.000f, 0.000f); // Black
+    private static final DeviceRgb COLOR_HEADER_AFFECTATION    = new DeviceRgb(18, 52, 153);             // #123499
+    //colors for Planning PDF
+    private static final DeviceRgb COLOR_GI                    = new DeviceRgb(0.400f, 0.600f, 0.900f); // Blue
+    private static final DeviceRgb COLOR_ID                    = new DeviceRgb(0.950f, 0.800f, 0.300f); // Yellow
+    private static final DeviceRgb COLOR_TDIA                  = new DeviceRgb(0.450f, 0.750f, 0.450f); // Green
+    //colors for Affectation PDF
+    private static final DeviceRgb COLOR_GI_LIGHT              = new DeviceRgb(0.400f, 0.600f, 0.900f);           
+    private static final DeviceRgb COLOR_ID_LIGHT              = new DeviceRgb(0.950f, 0.800f, 0.300f);           
+    private static final DeviceRgb COLOR_TDIA_LIGHT            = new DeviceRgb(0.450f, 0.750f, 0.450f);               
+    private static final DeviceRgb COLOR_EMPTY                 = new DeviceRgb(0.950f, 0.950f, 0.950f);
+    // Couleurs DOCX
+    private static final String C_HEADER_DOCX                  = "000000"; // Black
+    private static final String C_HEADER_DOCX_AFFECTATION      = "123499"; // #123499
+    private static final String C_GI_DOCX                      = "4F8AFF"; // Blue
+    private static final String C_ID_DOCX                      = "FFC107"; // Yellow
+    private static final String C_TDIA_DOCX                    = "689F38"; // Green
+    private static final String C_GI_DOCX_LIGHT                = "B388FF"; // #b388ff
+    private static final String C_ID_DOCX_LIGHT                = "FDA172"; // #fda172
+    private static final String C_TDIA_DOCX_LIGHT              = "009B00"; // #009b00
+    private static final String C_EMPTY_DOCX                   = "F0F0F0";
+    private static final String C_WHITE_DOCX                   = "FFFFFF";
+
+    // ═--------------------------------------------------------------------------
+    //  LOGO
+    // --------------------------------------------------------------------------
 
     private byte[] readLogoBytes() throws IOException {
         if (getServletContext() != null) {
@@ -156,27 +187,10 @@ public class FrontController extends HttpServlet {
         return doc.createParagraph();
     }
 
-    public static class PvItem {
-        private String id;
-        private String professorId;
-        private String professorName;
-        private String studentName;
-        private String filiere;
-        private String date;
-        private String heure;
-        private String salle;
-        private String fileName;
 
-        public String getId() { return id; }
-        public String getProfessorId() { return professorId; }
-        public String getProfessorName() { return professorName; }
-        public String getStudentName() { return studentName; }
-        public String getFiliere() { return filiere; }
-        public String getDate() { return date; }
-        public String getHeure() { return heure; }
-        public String getSalle() { return salle; }
-        public String getFileName() { return fileName; }
-    }
+    // --------------------------------------------------------------------------
+    //  ROUTING
+    // --------------------------------------------------------------------------
 
     @Override
     protected void doGet(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -264,7 +278,10 @@ public class FrontController extends HttpServlet {
         }
     }
 
-    
+    // --------------------------------------------------------------------------
+    //  DASHBOARD
+    // --------------------------------------------------------------------------
+
     @SuppressWarnings("unchecked")
     private void doDashboard(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         String query = req.getParameter("q");
@@ -335,6 +352,10 @@ public class FrontController extends HttpServlet {
         req.getRequestDispatcher("dashboard.jsp").forward(req, resp);
     }
 
+    // --------------------------------------------------------------------------
+    //  AFFECTATION (Upload, Lancer, Supprimer, Restaurer, Templates)
+    // --------------------------------------------------------------------------
+
     private void doClearHistory(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         String type = req.getParameter("type"); // "planning" or "affectation"
         String prefix = "Planning_";
@@ -359,7 +380,6 @@ public class FrontController extends HttpServlet {
     private void doAffectation(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         req.setAttribute("fichiers", service.getAllFichiers());
         
-        // Load History (Group by timestamp)
         java.io.File historyDir = new java.io.File(getHistoryFolder());
         List<String> historyTimestamps = new ArrayList<>();
         if (historyDir.exists() && historyDir.isDirectory()) {
@@ -368,7 +388,7 @@ public class FrontController extends HttpServlet {
                 java.util.Set<String> tsSet = new java.util.HashSet<>();
                 for (java.io.File f : files) {
                     if (f.isFile() && f.getName().startsWith("Affectation_")) {
-                        // Extract timestamp: Affectation_YYYY-MM-DD_HH-mm-ss.ext
+                        //Affectation_YYYY-MM-DD_HH-mm-ss.ext
                         String name = f.getName();
                         int extIndex = name.lastIndexOf('.');
                         if (extIndex > 12) {
@@ -381,7 +401,6 @@ public class FrontController extends HttpServlet {
         }
         java.util.Collections.sort(historyTimestamps, java.util.Collections.reverseOrder());
         req.setAttribute("historyTimestamps", historyTimestamps);
-        // req.setAttribute("historyFiles", historyFiles); replaced by historyTimestamps
 
         req.getRequestDispatcher("affectation.jsp").forward(req, resp);
     }
@@ -423,7 +442,6 @@ public class FrontController extends HttpServlet {
         try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
             org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet("Professeurs");
             
-            // Les deux premières lignes sont ignorées d'après les règles, mais on met des headers sur la ligne 1 pour l'utilisateur
             org.apache.poi.ss.usermodel.Row row0 = sheet.createRow(0);
             row0.createCell(0).setCellValue("En-tête décorative 1");
             
@@ -497,11 +515,9 @@ public class FrontController extends HttpServlet {
 
         try {
             List<Professeur> list = ExcelImporter.importProfs(file.getInputStream());
-            // On ne supprime plus tout (Upsert strategy pour préserver les historiques)
-            // service.deleteAffectationsAndProfesseurs();
             service.saveProfesseurs(list);
             
-            debug.add(list.size() + " professeurs traités (Mise à jour / Ajout) avec succès ! Les affectations existantes sont préservées.");
+            debug.add(list.size() + " professeurs traités avec succès. Les affectations existantes sont préservées.");
 
         } catch (Exception e) {
             debug.add("Erreur: " + e.getMessage());
@@ -549,12 +565,10 @@ public class FrontController extends HttpServlet {
 
         service.lancerAffectationGlobale(filieres, debug);
         
-        // Stocker les filières sélectionnées en session pour filtrer l'export
         req.getSession().setAttribute("lastFilieres", filieres);
         req.getSession().setAttribute("affectationDone", true);
         req.getSession().setAttribute("affectationDebug", debug);
         
-        // Auto-save history files
         java.io.File historyDir = new java.io.File(getHistoryFolder());
         if (!historyDir.exists()) historyDir.mkdirs();
         
@@ -569,7 +583,6 @@ public class FrontController extends HttpServlet {
             generateAffectationPdfToStream(pdfOut, filieres);
             generateAffectationDocxToStream(docxOut, filieres);
             
-            // Save raw data for restore
             for (entities.Affectation a : service.getAllAffectationsWithDetails()) {
                 if (a.getEtudiant() != null && a.getEncadrant() != null) {
                     txtOut.println(a.getEtudiant().getIde() + "," + a.getEncadrant().getIdp());
@@ -582,22 +595,10 @@ public class FrontController extends HttpServlet {
         req.setAttribute("fichiers", service.getAllFichiers());
         req.setAttribute("debug", debug);
         
-        // Redirect instead of forward to avoid duplicate history on refresh
         resp.sendRedirect("affectation.do");
     }
 
-    // Couleurs PDF — valeurs float (0-1) pour iText 7
-    private static final DeviceRgb COLOR_HEADER = new DeviceRgb(0.000f, 0.000f, 0.000f); // Black
-    private static final DeviceRgb COLOR_HEADER_AFFECTATION = new DeviceRgb(18, 52, 153); // #123499
-    // Dark colors for Planning
-    private static final DeviceRgb COLOR_GI     = new DeviceRgb(0.400f, 0.600f, 0.900f); // Darker Blue
-    private static final DeviceRgb COLOR_ID     = new DeviceRgb(0.950f, 0.800f, 0.300f); // Darker Yellow
-    private static final DeviceRgb COLOR_TDIA   = new DeviceRgb(0.450f, 0.750f, 0.450f); // Darker Green
-    // Light colors for Affectation
-    private static final DeviceRgb COLOR_GI_LIGHT     = new DeviceRgb(179, 136, 255); // #b388ff
-    private static final DeviceRgb COLOR_ID_LIGHT     = new DeviceRgb(253, 161, 114); // #fda172
-    private static final DeviceRgb COLOR_TDIA_LIGHT   = new DeviceRgb(0, 155, 0);     // #009b00
-    private static final DeviceRgb COLOR_EMPTY  = new DeviceRgb(0.950f, 0.950f, 0.950f);
+
 
     @SuppressWarnings("unchecked")
     private void doExportPdf(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -722,10 +723,6 @@ public class FrontController extends HttpServlet {
         return c;
     }
 
-    private Cell headerCell(String text, PdfFont font, int colspan, boolean sub) {
-        return headerCell(text, font, colspan, sub, COLOR_HEADER);
-    }
-
     private Cell subHeaderCell(String text, PdfFont font, DeviceRgb bgColor) {
         return new Cell()
                 .add(new Paragraph(text).setFont(font)
@@ -736,9 +733,6 @@ public class FrontController extends HttpServlet {
                 .setPadding(3);
     }
 
-    private Cell subHeaderCell(String text, PdfFont font) {
-        return subHeaderCell(text, font, COLOR_HEADER);
-    }
 
     private Cell profCell(String text, PdfFont font, DeviceRgb bg) {
         return new Cell()
@@ -772,19 +766,9 @@ public class FrontController extends HttpServlet {
         return COLOR_EMPTY;
     }
 
-    // Couleurs DOCX — hex RGB sans #
-    private static final String C_HEADER_DOCX = "000000"; // Black
-    private static final String C_HEADER_DOCX_AFFECTATION = "123499"; // #123499
-    // Dark colors for Planning
-    private static final String C_GI_DOCX     = "4F8AFF"; // Darker Blue
-    private static final String C_ID_DOCX     = "FFC107"; // Darker Yellow
-    private static final String C_TDIA_DOCX   = "689F38"; // Darker Green
-    // Light colors for Affectation
-    private static final String C_GI_DOCX_LIGHT     = "B388FF"; // #b388ff
-    private static final String C_ID_DOCX_LIGHT     = "FDA172"; // #fda172
-    private static final String C_TDIA_DOCX_LIGHT   = "009B00"; // #009b00
-    private static final String C_EMPTY_DOCX  = "F0F0F0";
-    private static final String C_WHITE_DOCX  = "FFFFFF";
+    // --------------------------------------------------------------------------
+    //  EXPORT AFFECTATION (docx)
+    // --------------------------------------------------------------------------
 
     @SuppressWarnings("unchecked")
     private void doExportDocx(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -1049,9 +1033,9 @@ public class FrontController extends HttpServlet {
         return COLOR_EMPTY;
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    //  PLANNING HANDLERS
-    // ══════════════════════════════════════════════════════════════════════════
+    // --------------------------------------------------------------------------
+    //  PLANNING
+    // --------------------------------------------------------------------------
 
     private void doPlanning(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
@@ -1077,15 +1061,13 @@ public class FrontController extends HttpServlet {
         }
         req.setAttribute("filiereLegend", filiereLegend);
 
-        // Pass whether affectations exist
+        
         boolean hasAffectations = service.getTotalEtudiantsAffectes(null) > 0;
         req.setAttribute("hasAffectations", hasAffectations);
 
-        // Pass all Salles
         List<entities.Salle> salles = service.getAllSalles();
         req.setAttribute("salles", salles);
         
-        // Load History
         java.io.File historyDir = new java.io.File(getHistoryFolder());
         List<String> historyFiles = new ArrayList<>();
         if (historyDir.exists() && historyDir.isDirectory()) {
@@ -1145,7 +1127,6 @@ public class FrontController extends HttpServlet {
     private void doLancerPlanning(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
         
-        // Prevent generation if no affectations
         if (service.getTotalEtudiantsAffectes(null) == 0) {
             resp.sendRedirect("planning.do");
             return;
@@ -1161,7 +1142,7 @@ public class FrontController extends HttpServlet {
 
         List<String> debug = new ArrayList<>();
 
-        // Retrieve the filières that were used for the last affectation
+        
         @SuppressWarnings("unchecked")
         List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
 
@@ -1185,7 +1166,7 @@ public class FrontController extends HttpServlet {
         req.setAttribute("hasAffectations", true);
         req.setAttribute("planningDone", true);
         
-        // Auto-save history files
+        
         java.io.File historyDir = new java.io.File(getHistoryFolder());
         if (!historyDir.exists()) historyDir.mkdirs();
         
@@ -1204,7 +1185,9 @@ public class FrontController extends HttpServlet {
         resp.sendRedirect("planning.do");
     }
 
-    // ── Planning PDF export ───────────────────────────────────────────────────
+    // --------------------------------------------------------------------------
+    //  PLANNING EXPORT (pdf)
+    // --------------------------------------------------------------------------
     private void doPlanningPdf(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
         resp.setContentType("application/pdf");
@@ -1324,11 +1307,10 @@ public class FrontController extends HttpServlet {
                 .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
                 .setMarginBottom(8));
 
-        // Table columns: ID | Encadrant | Jury1 | Jury2 | Date | Heure | Salle | Nom | Prénom | Filière
+        //ID | Encadrant | Jury1 | Jury2 | Date | Heure | Salle | Nom | Prénom | Filière
         float[] cols = {3f, 12f, 12f, 12f, 8f, 6f, 6f, 9f, 9f, 5f};
         Table table = new Table(UnitValue.createPercentArray(cols)).useAllAvailableWidth();
 
-        // Header row
         String[] headers = {"ID","Encadrant","Membre de jury 1","Membre de jury 2",
                             "Date","Heure","Salle","Nom d'étudiant","Prénom d'étudiant","Filière"};
         for (String h : headers) {
@@ -1423,7 +1405,9 @@ public class FrontController extends HttpServlet {
         }
     }
 
-    // ── Planning DOCX export ──────────────────────────────────────────────────
+    // --------------------------------------------------------------------------
+    //  PLANNING EXPORT (docx)
+    // --------------------------------------------------------------------------
     private void doPlanningDocx(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
         resp.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
@@ -1527,36 +1511,49 @@ public class FrontController extends HttpServlet {
         }
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    //  PV
+    // ══════════════════════════════════════════════════════════════════════════
+
     private void doPV(HttpServletRequest req, HttpServletResponse resp)
             throws ServletException, IOException {
         List<Soutenance> soutenances = service.getAllSoutenances();
         List<List<Soutenance>> pvGroups = groupSoutenancesForPv(soutenances);
-        List<PvItem> pvItems = buildPvItems(pvGroups);
+        List<Pv> pvItems = buildPvItems(pvGroups);
         Map<String, Map<String, Object>> professorGroups = new LinkedHashMap<>();
 
-        for (PvItem item : pvItems) {
+        for (Pv item : pvItems) {
             Map<String, Object> group = professorGroups.get(item.getProfessorId());
             if (group == null) {
                 group = new LinkedHashMap<>();
                 group.put("professorId", item.getProfessorId());
                 group.put("professorName", item.getProfessorName());
-                group.put("pvs", new ArrayList<PvItem>());
+                group.put("pvs", new ArrayList<Pv>());
                 professorGroups.put(item.getProfessorId(), group);
             }
             @SuppressWarnings("unchecked")
-            List<PvItem> pvs = (List<PvItem>) group.get("pvs");
+            List<Pv> pvs = (List<Pv>) group.get("pvs");
             pvs.add(item);
         }
 
+        List<Map<String, Object>> sortedProfGroups = new ArrayList<>(professorGroups.values());
+        sortedProfGroups.sort((g1, g2) -> {
+            String name1 = (String) g1.get("professorName");
+            String name2 = (String) g2.get("professorName");
+            if (name1 == null) return -1;
+            if (name2 == null) return 1;
+            return name1.compareToIgnoreCase(name2);
+        });
+
         String selectedProfessorId = req.getParameter("profId");
-        if ((selectedProfessorId == null || selectedProfessorId.trim().isEmpty()) && !professorGroups.isEmpty()) {
-            selectedProfessorId = professorGroups.keySet().iterator().next();
+        if ((selectedProfessorId == null || selectedProfessorId.trim().isEmpty()) && !sortedProfGroups.isEmpty()) {
+            selectedProfessorId = (String) sortedProfGroups.get(0).get("professorId");
         }
 
         req.setAttribute("soutenances", soutenances);
         req.setAttribute("totalPVs", pvItems.size());
         req.setAttribute("pvItems", pvItems);
-        req.setAttribute("professorGroups", new ArrayList<>(professorGroups.values()));
+        req.setAttribute("professorGroups", sortedProfGroups);
         req.setAttribute("selectedProfessorId", selectedProfessorId);
         req.setAttribute("selectedProfessorGroup", selectedProfessorId != null ? professorGroups.get(selectedProfessorId) : null);
         req.getRequestDispatcher("pv.jsp").forward(req, resp);
@@ -1571,7 +1568,7 @@ public class FrontController extends HttpServlet {
             return;
         }
 
-        PvItem item = buildPvItem(group);
+        Pv item = buildPvItem(group);
         resp.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
         resp.setHeader("Content-Disposition", "attachment; filename=\"" + encodeDownloadFileName(item.getFileName()) + "\"");
         generatePvDocx(resp.getOutputStream(), group);
@@ -1609,7 +1606,7 @@ public class FrontController extends HttpServlet {
         Set<String> createdFolders = new HashSet<>();
         try (ZipOutputStream zip = new ZipOutputStream(resp.getOutputStream())) {
             for (List<Soutenance> group : groups) {
-                PvItem item = buildPvItem(group);
+                Pv item = buildPvItem(group);
                 String folderName = pvProfessorFolderName(group) + "/";
                 if (createdFolders.add(folderName)) {
                     zip.putNextEntry(new ZipEntry(folderName));
@@ -1649,29 +1646,29 @@ public class FrontController extends HttpServlet {
         return s.getJury().getIdJury() + "_" + s.getDate().getTime() + "_" + s.getHeure() + "_" + s.getSalle().getId_salle();
     }
 
-    private List<PvItem> buildPvItems(List<List<Soutenance>> groups) {
-        List<PvItem> items = new ArrayList<>();
+    private List<Pv> buildPvItems(List<List<Soutenance>> groups) {
+        List<Pv> items = new ArrayList<>();
         for (List<Soutenance> group : groups) {
             if (!group.isEmpty()) items.add(buildPvItem(group));
         }
         return items;
     }
 
-    private PvItem buildPvItem(List<Soutenance> group) {
+    private Pv buildPvItem(List<Soutenance> group) {
         Soutenance first = group.get(0);
         Professeur professor = first.getJury().getPresident();
         SimpleDateFormat sdf = new SimpleDateFormat("dd/MM/yyyy");
 
-        PvItem item = new PvItem();
-        item.id = pvGroupKey(first);
-        item.professorId = professor != null && professor.getIdp() != null ? String.valueOf(professor.getIdp()) : "0";
-        item.professorName = profName(professor);
-        item.studentName = studentNames(group);
-        item.filiere = first.getEtudiant() != null ? first.getEtudiant().getFiliere() : "";
-        item.date = first.getDate() != null ? sdf.format(first.getDate()) : "";
-        item.heure = first.getHeure();
-        item.salle = first.getSalle() != null ? first.getSalle().getNum_salle() : "";
-        item.fileName = pvFileName(group);
+        Pv item = new Pv();
+        item.setId(pvGroupKey(first));
+        item.setProfessorId(professor != null && professor.getIdp() != null ? String.valueOf(professor.getIdp()) : "0");
+        item.setProfessorName(profName(professor));
+        item.setStudentName(studentNames(group));
+        item.setFiliere(first.getEtudiant() != null ? first.getEtudiant().getFiliere() : "");
+        item.setDate(first.getDate() != null ? sdf.format(first.getDate()) : "");
+        item.setHeure(first.getHeure());
+        item.setSalle(first.getSalle() != null ? first.getSalle().getNum_salle() : "");
+        item.setFileName(pvFileName(group));
         return item;
     }
 
@@ -1899,6 +1896,10 @@ public class FrontController extends HttpServlet {
             return fileName;
         }
     }
+
+    // --------------------------------------------------------------------------
+    //  HELPERS
+    // --------------------------------------------------------------------------
 
     private String safe(String value) {
         return value == null ? "" : value.trim();

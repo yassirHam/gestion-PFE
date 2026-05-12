@@ -208,13 +208,12 @@
                     <button class="btn btn-primary w-100">Upload Etudiants</button>
                 </form>
             </div>
-
             <!-- PROFS -->
             <div class="col-md-6">
                 <form action="uploadProfs.do" method="post" enctype="multipart/form-data">
                     <label>Fichier Professeurs</label>
                     <input type="file" name="files" class="form-control mb-2" required>
-                    <button class="btn btn-success w-100">Upload Professeurs</button>
+                    <button class="btn btn-success w-100" onclick="return confirm('Lancer la mise à jour de la liste sans supprimer les affectations actuelles')">Upload Professeurs</button>
                 </form>
             </div>
 

@@ -62,10 +62,34 @@ public class PfeServiceImpl implements PfeService {
     @Override
     public void saveEtudiants(List<Etudiant> etudiants, String filiere, String fileName) {
         normalizeBinomeSubjects(etudiants);
-        etuDao.deleteByFiliere(filiere);
-        etuDao.saveAll(etudiants);
+        
+        List<Etudiant> existants = etuDao.findByFilieres(java.util.Collections.singletonList(filiere));
+        List<Etudiant> aSauvegarder = new java.util.ArrayList<>();
+        
+        for (Etudiant nouveau : etudiants) {
+            Etudiant etuExistant = null;
+            for (Etudiant e : existants) {
+                if (e.getCne() != null && nouveau.getCne() != null && e.getCne().equalsIgnoreCase(nouveau.getCne())) {
+                    etuExistant = e;
+                    break;
+                }
+            }
+            
+            if (etuExistant != null) {
+                etuExistant.setNomE(nouveau.getNomE());
+                etuExistant.setPrenomE(nouveau.getPrenomE());
+                etuExistant.setBinome_cne(nouveau.getBinome_cne());
+                etuExistant.setSujet_stage(nouveau.getSujet_stage());
+                aSauvegarder.add(etuExistant);
+            } else {
+                aSauvegarder.add(nouveau);
+            }
+        }
+        
+        etuDao.saveAll(aSauvegarder);
+        
         fichierDao.deleteByFiliere(filiere);
-        fichierDao.save(new FichierListe(fileName, filiere, etudiants.size()));
+        fichierDao.save(new entities.FichierListe(fileName, filiere, etudiants.size()));
     }
 
     @Override
@@ -89,12 +113,10 @@ public class PfeServiceImpl implements PfeService {
             }
             
             if (profExistant != null) {
-                // Upsert: Mettre à jour les spécialités sans changer l'ID (idp)
                 profExistant.setDiscipline(nouveau.getDiscipline());
                 profExistant.setSpecialite(nouveau.getSpecialite());
                 aSauvegarder.add(profExistant);
             } else {
-                // Nouveau professeur
                 aSauvegarder.add(nouveau);
             }
         }
@@ -146,7 +168,7 @@ public class PfeServiceImpl implements PfeService {
                         Affectation a = new Affectation();
                         a.setEtudiant(etu);
                         a.setEncadrant(prof);
-                        toSave.add(a);
+                        toSave.add	(a);
                     }
                 } catch (Exception e) {
                 }

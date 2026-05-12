@@ -18,7 +18,7 @@ public class PlanningConfig {
     public static PlanningConfig defaults() {
         return new PlanningConfig(
                 new int[]{9, 10, 11, 14, 15, 16, 17}, 2026, Calendar.JUNE, 23, 4,
-                List.of("S4A", "S5A", "S16A", "S17A", "AMPHI A"), List.of(
+                List.of("S3 AB", "S4 AB", "S3 NB", "S2 NB", "AMPHI A"), List.of(
                         "E74C3C", "3498DB", "2ECC71", "F39C12", "9B59B6",
                         "1ABC9C", "E67E22", "2980B9", "27AE60", "8E44AD",
                         "C0392B", "16A085", "D35400", "2C3E50", "F1C40F",

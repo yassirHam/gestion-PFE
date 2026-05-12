@@ -85,9 +85,13 @@
                     <div class="card shadow-sm">
                         <div class="card-header bg-white">
                             <h5 class="mb-0 fw-bold">Professeurs</h5>
+                            <div class="input-group input-group-sm mt-2">
+                                <span class="input-group-text bg-light border-end-0"><i class="fa-solid fa-search text-muted"></i></span>
+                                <input type="text" id="searchProf" class="form-control border-start-0 ps-0" placeholder="Chercher un professeur...">
+                            </div>
                         </div>
                         <div class="table-responsive">
-                            <table class="table table-hover mb-0 align-middle">
+                            <table class="table table-hover mb-0 align-middle" id="profTable">
                                 <thead class="table-light">
                                     <tr>
                                         <th>Professeur</th>
@@ -180,5 +184,21 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('searchProf');
+        if (searchInput) {
+            searchInput.addEventListener('keyup', function() {
+                let filter = this.value.toLowerCase();
+                let rows = document.querySelectorAll('#profTable tbody tr');
+                
+                rows.forEach(row => {
+                    let text = row.querySelector('td:first-child').textContent.toLowerCase();
+                    row.style.display = text.includes(filter) ? '' : 'none';
+                });
+            });
+        }
+    });
+</script>
 </body>
 </html>

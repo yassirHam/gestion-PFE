@@ -88,6 +88,13 @@ public class PlanningServiceImpl implements PlanningService {
         List<Soutenance> result = new ArrayList<>();
         int[] slots = config.getSlots();
 
+        // Sort projects so encadrants with the most students are scheduled first.
+        // Their availability is the scarcest resource, and processing them early
+        // leaves more flexibility for jury balancing later.
+        Map<Long, Integer> encadrantProjectCount = countEncadrantProjects(projects);
+        projects.sort(Comparator.comparingInt(
+                (List<Affectation> proj) -> -encadrantProjectCount.getOrDefault(encadrantIdOf(proj), 0)));
+
         for (List<Affectation> project : projects) {
             Affectation mainAff = project.get(0);
             Etudiant etudiant = mainAff.getEtudiant();
@@ -97,8 +104,14 @@ public class PlanningServiceImpl implements PlanningService {
             List<Professeur> juryPool = new ArrayList<>(allProfs);
             juryPool.removeIf(p -> p.getIdp().equals(encadrant.getIdp()));
 
+            // Global min load across the jury pool (NOT just the slot-available subset).
+            // Passing this to the strategy keeps the load gap consistent across the entire
+            // planning instead of drifting locally per slot.
+            int globalMinLoad = computeGlobalMinLoad(juryPool, profJuryCount);
+
             PlanningChoice bestChoice = findBestPlanningChoice( encadrant, juryPool, planningDates, slots, salles,
-                    profBusyAtSlot,profSchedule, profJuryCount, profDailyCount, roomBusy,nlpResult);
+                    profBusyAtSlot,profSchedule, profJuryCount, profDailyCount, roomBusy,nlpResult,
+                    globalMinLoad);
 
             if (bestChoice != null) {
                 result.addAll(saveProjectPlanning( project, encadrant, bestChoice, planningDates, profBusyAtSlot,
@@ -327,17 +340,16 @@ public class PlanningServiceImpl implements PlanningService {
                                                   Map<Long, Integer> profJuryCount,
                                                   Map<Long, Map<String, Integer>> profDailyCount,
                                                   Map<String, Boolean> roomBusy,
-                                                  SujetAnalysis nlpResult) {
+                                                  SujetAnalysis nlpResult,
+                                                  int globalMinLoad) {
         PlanningChoice bestChoice = null;
+        int bestJuryMaxLoad = Integer.MAX_VALUE;
         int minDailyLoad = Integer.MAX_VALUE;
         int minSlotLoad = Integer.MAX_VALUE;
 
         for (int dayIdx = 0; dayIdx < planningDates.validDates.size(); dayIdx++) {
             String dateStr = planningDates.validDates.get(dayIdx);
             int encadrantDailyLoad = profDailyCount.get(encadrant.getIdp()).getOrDefault(dateStr, 0);
-            if (encadrantDailyLoad > minDailyLoad) {
-                continue;
-            }
 
             for (int slot : slots) {
                 if (!isProfAvailable(encadrant.getIdp(), dateStr, slot, profBusyAtSlot, profSchedule)) {
@@ -346,9 +358,6 @@ public class PlanningServiceImpl implements PlanningService {
 
                 String slotKey = dateStr + "|" + slot;
                 int slotLoad = getSlotLoad(slotKey, salles, roomBusy);
-                if (!isBetterChoice(encadrantDailyLoad, slotLoad, minDailyLoad, minSlotLoad)) {
-                    continue;
-                }
 
                 Salle freeSalle = getFreeRoom(slotKey, salles, roomBusy);
                 if (freeSalle == null) {
@@ -361,28 +370,74 @@ public class PlanningServiceImpl implements PlanningService {
                 }
 
                 Professeur[] pickedJury = jurySelectionStrategy.selectJury(
-                        encadrant, available, profJuryCount, nlpResult, config);
+                        encadrant, available, profJuryCount, globalMinLoad, nlpResult, config);
                 if (pickedJury == null) {
                     continue;
                 }
 
-                bestChoice = new PlanningChoice(dayIdx, slot, freeSalle, pickedJury[0], pickedJury[1]);
-                minDailyLoad = encadrantDailyLoad;
-                minSlotLoad = slotLoad;
+                int juryMaxLoad = Math.max(
+                        profJuryCount.getOrDefault(pickedJury[0].getIdp(), 0),
+                        profJuryCount.getOrDefault(pickedJury[1].getIdp(), 0)
+                );
+
+                if (isBetterChoice(juryMaxLoad, encadrantDailyLoad, slotLoad,
+                        bestJuryMaxLoad, minDailyLoad, minSlotLoad)) {
+                    bestChoice = new PlanningChoice(dayIdx, slot, freeSalle, pickedJury[0], pickedJury[1]);
+                    bestJuryMaxLoad = juryMaxLoad;
+                    minDailyLoad = encadrantDailyLoad;
+                    minSlotLoad = slotLoad;
+                }
             }
         }
 
         return bestChoice;
     }
 
-    private boolean isBetterChoice(int encadrantDailyLoad,
+    /**
+     * Lexicographic preference: pick the slot whose chosen jury has the lowest
+     * max load first. This is the dominant criterion for fairness. Ties are
+     * broken by encadrant daily load, then by slot occupancy.
+     */
+    private boolean isBetterChoice(int juryMaxLoad,
+                                   int encadrantDailyLoad,
                                    int slotLoad,
+                                   int bestJuryMaxLoad,
                                    int minDailyLoad,
                                    int minSlotLoad) {
-        if (encadrantDailyLoad < minDailyLoad) {
-            return true;
+        if (juryMaxLoad != bestJuryMaxLoad) {
+            return juryMaxLoad < bestJuryMaxLoad;
         }
-        return encadrantDailyLoad == minDailyLoad && slotLoad < minSlotLoad;
+        if (encadrantDailyLoad != minDailyLoad) {
+            return encadrantDailyLoad < minDailyLoad;
+        }
+        return slotLoad < minSlotLoad;
+    }
+
+    private int computeGlobalMinLoad(List<Professeur> juryPool, Map<Long, Integer> profJuryCount) {
+        int min = Integer.MAX_VALUE;
+        for (Professeur p : juryPool) {
+            int load = profJuryCount.getOrDefault(p.getIdp(), 0);
+            if (load < min) min = load;
+        }
+        return min == Integer.MAX_VALUE ? 0 : min;
+    }
+
+    private Long encadrantIdOf(List<Affectation> project) {
+        if (project == null || project.isEmpty()) return null;
+        Affectation main = project.get(0);
+        if (main.getEncadrant() == null) return null;
+        return main.getEncadrant().getIdp();
+    }
+
+    private Map<Long, Integer> countEncadrantProjects(List<List<Affectation>> projects) {
+        Map<Long, Integer> count = new HashMap<>();
+        for (List<Affectation> p : projects) {
+            Long id = encadrantIdOf(p);
+            if (id != null) {
+                count.merge(id, 1, Integer::sum);
+            }
+        }
+        return count;
     }
 
     private List<Professeur> findAvailableProfessors(List<Professeur> juryPool,

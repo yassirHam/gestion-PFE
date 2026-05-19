@@ -95,6 +95,19 @@ public class PlanningServiceImpl implements PlanningService {
         projects.sort(Comparator.comparingInt(
                 (List<Affectation> proj) -> -encadrantProjectCount.getOrDefault(encadrantIdOf(proj), 0)));
 
+        // Pre-populate profJuryCount with the expected number of soutenances each professor
+        // will preside over (one per student they supervise). This way, the load balancing
+        // accounts for total participation (president + rapporteur), matching what the
+        // dashboard chart displays. Without this, an encadrant of 5 students starts at 0
+        // and gets piled with rapporteur duties on top of their 5 future president roles.
+        for (List<Affectation> project : projects) {
+            for (Affectation aff : project) {
+                if (aff.getEncadrant() != null && aff.getEncadrant().getIdp() != null) {
+                    profJuryCount.merge(aff.getEncadrant().getIdp(), 1, Integer::sum);
+                }
+            }
+        }
+
         for (List<Affectation> project : projects) {
             Affectation mainAff = project.get(0);
             Etudiant etudiant = mainAff.getEtudiant();
@@ -471,8 +484,12 @@ public class PlanningServiceImpl implements PlanningService {
         markProfBusy(choice.rapporteur1.getIdp(), dateStr, choice.slot, profBusyAtSlot, profSchedule, profDailyCount);
         markProfBusy(choice.rapporteur2.getIdp(), dateStr, choice.slot, profBusyAtSlot, profSchedule, profDailyCount);
 
-        profJuryCount.merge(choice.rapporteur1.getIdp(), 1, Integer::sum);
-        profJuryCount.merge(choice.rapporteur2.getIdp(), 1, Integer::sum);
+        // Increment by project size so that binomes count for 2 (matching the dashboard chart
+        // which counts per-soutenance, not per-project). The encadrant count was already
+        // pre-loaded based on the number of students they supervise, so we don't add it again.
+        int projectSize = project.size();
+        profJuryCount.merge(choice.rapporteur1.getIdp(), projectSize, Integer::sum);
+        profJuryCount.merge(choice.rapporteur2.getIdp(), projectSize, Integer::sum);
         roomBusy.put(slotKey + "|" + choice.salle.getId_salle(), true);
 
         Jury jury = new Jury();

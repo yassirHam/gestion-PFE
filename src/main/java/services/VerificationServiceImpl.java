@@ -221,41 +221,35 @@ public class VerificationServiceImpl implements VerificationService {
                                             VerificationReport report) {
         int maxJuryLoadGap = PlanningConfig.defaults().getMaxJuryLoadGap();
 
-        // Count jury participations (rapporteur roles only, not president/encadrant)
-        Map<Long, Integer> juryCountByProfessor = new LinkedHashMap<>();
+        // Count TOTAL participations per professor (president + rapporteur1 + rapporteur2),
+        // counted PER SOUTENANCE - so a binome counts twice for the same jury.
+        // This matches the metric displayed on the dashboard chart "Participations aux Jurys
+        // par Professeur" (PfeServiceImpl.getSoutenancesParProf), so the algorithm and the
+        // verification operate on the exact same numbers the user sees.
+        Map<Long, Integer> participationByProfessor = new LinkedHashMap<>();
         Map<Long, String> namesByProfessor = new HashMap<>();
 
         for (Professeur professeur : professeurDAO.findAll()) {
             if (professeur.getIdp() == null) continue;
-            juryCountByProfessor.put(professeur.getIdp(), 0);
+            participationByProfessor.put(professeur.getIdp(), 0);
             namesByProfessor.put(professeur.getIdp(), professorName(professeur));
         }
-
-        // Track unique projects already counted (binomes share the same jury)
-        Set<String> countedProjects = new HashSet<>();
 
         for (Soutenance soutenance : soutenances) {
             Jury jury = soutenance.getJury();
             if (jury == null) continue;
 
-            Etudiant etudiant = soutenance.getEtudiant();
-            String projKey = projectKey(etudiant);
-            if (!countedProjects.add(projKey)) continue; // skip duplicate entries for binomes
-
-            if (jury.getRapporteur1() != null && jury.getRapporteur1().getIdp() != null) {
-                juryCountByProfessor.merge(jury.getRapporteur1().getIdp(), 1, Integer::sum);
-                namesByProfessor.putIfAbsent(jury.getRapporteur1().getIdp(), professorName(jury.getRapporteur1()));
-            }
-            if (jury.getRapporteur2() != null && jury.getRapporteur2().getIdp() != null) {
-                juryCountByProfessor.merge(jury.getRapporteur2().getIdp(), 1, Integer::sum);
-                namesByProfessor.putIfAbsent(jury.getRapporteur2().getIdp(), professorName(jury.getRapporteur2()));
-            }
+            countRole(jury.getPresident(), participationByProfessor, namesByProfessor);
+            countRole(jury.getRapporteur1(), participationByProfessor, namesByProfessor);
+            countRole(jury.getRapporteur2(), participationByProfessor, namesByProfessor);
         }
 
-        // Find min and max among professors who participated at least once
+        // Find min and max among professors who participated at least once.
+        // A prof with zero participations is not "underloaded" - they may simply have
+        // no encadrement and not have been picked as rapporteur, which is fine.
         int minLoad = Integer.MAX_VALUE;
         int maxLoad = 0;
-        for (Map.Entry<Long, Integer> entry : juryCountByProfessor.entrySet()) {
+        for (Map.Entry<Long, Integer> entry : participationByProfessor.entrySet()) {
             int count = entry.getValue();
             if (count > 0 && count < minLoad) minLoad = count;
             if (count > maxLoad) maxLoad = count;
@@ -273,10 +267,11 @@ public class VerificationServiceImpl implements VerificationService {
                             + ", ce qui depasse le seuil autorise de " + maxJuryLoadGap + ".");
         }
 
-        // Flag individual professors who are overloaded beyond the gap
-        for (Map.Entry<Long, Integer> entry : juryCountByProfessor.entrySet()) {
+        // Flag individual professors who are overloaded beyond the gap (only those who
+        // actually participate - avoid false alerts for profs with 0 participations).
+        for (Map.Entry<Long, Integer> entry : participationByProfessor.entrySet()) {
             int count = entry.getValue();
-            if (count > minLoad + maxJuryLoadGap) {
+            if (count > 0 && count > minLoad + maxJuryLoadGap) {
                 report.addIssue("ALERTE", "Planning",
                         "Surcharge jury professeur",
                         namesByProfessor.get(entry.getKey()) + " participe a " + count
@@ -284,6 +279,13 @@ public class VerificationServiceImpl implements VerificationService {
                                 + " (ecart autorise: " + maxJuryLoadGap + ").");
             }
         }
+    }
+
+    private void countRole(Professeur professeur, Map<Long, Integer> participations,
+                           Map<Long, String> names) {
+        if (professeur == null || professeur.getIdp() == null) return;
+        participations.merge(professeur.getIdp(), 1, Integer::sum);
+        names.putIfAbsent(professeur.getIdp(), professorName(professeur));
     }
 
     private void verifySoutenanceBasics(Soutenance soutenance, Map<Long, Affectation> affectationByStudent, VerificationReport report) {

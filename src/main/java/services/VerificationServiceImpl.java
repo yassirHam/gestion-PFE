@@ -214,6 +214,7 @@ public class VerificationServiceImpl implements VerificationService {
         verifyProfessorOverlaps(projectsByProfessorSlot, defensesByProject, report);
         verifyProfessorRest(scheduleByProfessorAndDate, defensesByProject, report);
         verifyJuryLoadDistribution(soutenances, affectationByStudent, report);
+        verifyJuryInformatique(soutenances, affectationByStudent, report);
     }
 
     private void verifyJuryLoadDistribution(List<Soutenance> soutenances,
@@ -279,6 +280,65 @@ public class VerificationServiceImpl implements VerificationService {
                                 + " (ecart autorise: " + maxJuryLoadGap + ").");
             }
         }
+    }
+
+    private void verifyJuryInformatique(List<Soutenance> soutenances,
+                                       Map<Long, Affectation> affectationByStudent,
+                                       VerificationReport report) {
+        // Check that every jury has at least 2 "info" professors among the 3 members
+        // (president + rapporteur1 + rapporteur2). This mirrors the "2 informaticiens"
+        // rule enforced during generation in DefaultJurySelectionStrategy.
+        Set<String> checkedProjects = new HashSet<>();
+
+        for (Soutenance soutenance : soutenances) {
+            Etudiant etudiant = soutenance.getEtudiant();
+            if (etudiant == null) continue;
+
+            String projKey = projectKey(etudiant);
+            if (!checkedProjects.add(projKey)) continue; // check once per project (binomes share jury)
+
+            Jury jury = soutenance.getJury();
+            if (jury == null || jury.getPresident() == null || jury.getRapporteur1() == null || jury.getRapporteur2() == null) {
+                continue; // incomplete jury is already flagged by verifySoutenanceBasics
+            }
+
+            int infoCount = 0;
+            if (isInfoProfesseur(jury.getPresident())) infoCount++;
+            if (isInfoProfesseur(jury.getRapporteur1())) infoCount++;
+            if (isInfoProfesseur(jury.getRapporteur2())) infoCount++;
+
+            if (infoCount < 2) {
+                String studentNames = studentName(etudiant);
+                // For binomes, try to get both names
+                if (etudiant.hasBinome()) {
+                    for (Soutenance s2 : soutenances) {
+                        if (s2.getEtudiant() != null && !s2.getEtudiant().getIde().equals(etudiant.getIde())
+                                && projectKey(s2.getEtudiant()).equals(projKey)) {
+                            studentNames += " & " + studentName(s2.getEtudiant());
+                            break;
+                        }
+                    }
+                }
+                report.addIssue("ALERTE", "Planning",
+                        "Jury sans 2 informaticiens",
+                        "Le jury de " + studentNames + " ne contient que " + infoCount
+                                + " professeur(s) d'informatique sur 3 (president: "
+                                + professorName(jury.getPresident()) + ", rapporteurs: "
+                                + professorName(jury.getRapporteur1()) + ", "
+                                + professorName(jury.getRapporteur2()) + ").");
+            }
+        }
+    }
+
+    private boolean isInfoProfesseur(Professeur p) {
+        if (p == null) return false;
+        return containsIgnoreCase(p.getDiscipline(), "info")
+                || containsIgnoreCase(p.getSpecialite(), "info");
+    }
+
+    private boolean containsIgnoreCase(String value, String expected) {
+        if (value == null || expected == null) return false;
+        return value.toLowerCase(java.util.Locale.ROOT).contains(expected.toLowerCase(java.util.Locale.ROOT));
     }
 
     private void countRole(Professeur professeur, Map<Long, Integer> participations,

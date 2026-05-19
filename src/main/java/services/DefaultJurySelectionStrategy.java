@@ -27,6 +27,32 @@ public class DefaultJurySelectionStrategy implements JurySelectionStrategy {
             }
         }
 
+        // First pass: respect both "2 informaticiens" rule AND maxJuryLoadGap
+        for (int i = 0; i < candidates.size(); i++) {
+            Professeur p1 = candidates.get(i);
+            if (profJuryCount.getOrDefault(p1.getIdp(), 0) > minLoad + maxLoadGap) continue;
+            for (int j = i + 1; j < candidates.size(); j++) {
+                Professeur p2 = candidates.get(j);
+                if (profJuryCount.getOrDefault(p2.getIdp(), 0) > minLoad + maxLoadGap) continue;
+                int infoCount = (encadrantIsInfo ? 1 : 0) + (isInfo(p1) ? 1 : 0) + (isInfo(p2) ? 1 : 0);
+                if (infoCount >= 2) {
+                    return new Professeur[]{p1, p2};
+                }
+            }
+        }
+
+        // Second pass: respect maxJuryLoadGap but relax the "2 informaticiens" rule
+        for (int i = 0; i < candidates.size(); i++) {
+            Professeur p1 = candidates.get(i);
+            if (profJuryCount.getOrDefault(p1.getIdp(), 0) > minLoad + maxLoadGap) continue;
+            for (int j = i + 1; j < candidates.size(); j++) {
+                Professeur p2 = candidates.get(j);
+                if (profJuryCount.getOrDefault(p2.getIdp(), 0) > minLoad + maxLoadGap) continue;
+                return new Professeur[]{p1, p2};
+            }
+        }
+
+        // Last resort: ignore maxJuryLoadGap to avoid failing the scheduling entirely
         for (int i = 0; i < candidates.size(); i++) {
             for (int j = i + 1; j < candidates.size(); j++) {
                 Professeur p1 = candidates.get(i);

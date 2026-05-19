@@ -213,6 +213,77 @@ public class VerificationServiceImpl implements VerificationService {
         verifyRoomOverlaps(projectsByRoomSlot, defensesByProject, report);
         verifyProfessorOverlaps(projectsByProfessorSlot, defensesByProject, report);
         verifyProfessorRest(scheduleByProfessorAndDate, defensesByProject, report);
+        verifyJuryLoadDistribution(soutenances, affectationByStudent, report);
+    }
+
+    private void verifyJuryLoadDistribution(List<Soutenance> soutenances,
+                                            Map<Long, Affectation> affectationByStudent,
+                                            VerificationReport report) {
+        int maxJuryLoadGap = PlanningConfig.defaults().getMaxJuryLoadGap();
+
+        // Count jury participations (rapporteur roles only, not president/encadrant)
+        Map<Long, Integer> juryCountByProfessor = new LinkedHashMap<>();
+        Map<Long, String> namesByProfessor = new HashMap<>();
+
+        for (Professeur professeur : professeurDAO.findAll()) {
+            if (professeur.getIdp() == null) continue;
+            juryCountByProfessor.put(professeur.getIdp(), 0);
+            namesByProfessor.put(professeur.getIdp(), professorName(professeur));
+        }
+
+        // Track unique projects already counted (binomes share the same jury)
+        Set<String> countedProjects = new HashSet<>();
+
+        for (Soutenance soutenance : soutenances) {
+            Jury jury = soutenance.getJury();
+            if (jury == null) continue;
+
+            Etudiant etudiant = soutenance.getEtudiant();
+            String projKey = projectKey(etudiant);
+            if (!countedProjects.add(projKey)) continue; // skip duplicate entries for binomes
+
+            if (jury.getRapporteur1() != null && jury.getRapporteur1().getIdp() != null) {
+                juryCountByProfessor.merge(jury.getRapporteur1().getIdp(), 1, Integer::sum);
+                namesByProfessor.putIfAbsent(jury.getRapporteur1().getIdp(), professorName(jury.getRapporteur1()));
+            }
+            if (jury.getRapporteur2() != null && jury.getRapporteur2().getIdp() != null) {
+                juryCountByProfessor.merge(jury.getRapporteur2().getIdp(), 1, Integer::sum);
+                namesByProfessor.putIfAbsent(jury.getRapporteur2().getIdp(), professorName(jury.getRapporteur2()));
+            }
+        }
+
+        // Find min and max among professors who participated at least once
+        int minLoad = Integer.MAX_VALUE;
+        int maxLoad = 0;
+        for (Map.Entry<Long, Integer> entry : juryCountByProfessor.entrySet()) {
+            int count = entry.getValue();
+            if (count > 0 && count < minLoad) minLoad = count;
+            if (count > maxLoad) maxLoad = count;
+        }
+
+        if (minLoad == Integer.MAX_VALUE) return; // no jury data
+
+        int actualGap = maxLoad - minLoad;
+
+        if (actualGap > maxJuryLoadGap) {
+            report.addIssue("ALERTE", "Planning",
+                    "Repartition jury non equitable",
+                    "L'ecart entre le minimum (" + minLoad + ") et le maximum (" + maxLoad
+                            + ") de participations jury est de " + actualGap
+                            + ", ce qui depasse le seuil autorise de " + maxJuryLoadGap + ".");
+        }
+
+        // Flag individual professors who are overloaded beyond the gap
+        for (Map.Entry<Long, Integer> entry : juryCountByProfessor.entrySet()) {
+            int count = entry.getValue();
+            if (count > minLoad + maxJuryLoadGap) {
+                report.addIssue("ALERTE", "Planning",
+                        "Surcharge jury professeur",
+                        namesByProfessor.get(entry.getKey()) + " participe a " + count
+                                + " jury(s), alors que le minimum est " + minLoad
+                                + " (ecart autorise: " + maxJuryLoadGap + ").");
+            }
+        }
     }
 
     private void verifySoutenanceBasics(Soutenance soutenance, Map<Long, Affectation> affectationByStudent, VerificationReport report) {

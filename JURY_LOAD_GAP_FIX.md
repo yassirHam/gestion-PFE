@@ -556,3 +556,258 @@ public static PlanningConfig defaults() {
 ```
 
 Pour ajuster la tolerance, modifier la derniere valeur. Un gap de 2 = distribution tres stricte. Un gap de 4 = plus de flexibilite pour le NLP matching.
+
+
+
+---
+
+# Mise a Jour : Correctifs Round 2
+
+Apres le premier correctif, le dashboard affichait toujours une distribution de jurys allant de 8 a 12 (ecart de 4) avec `maxJuryLoadGap = 2`, mais aucune alerte ne se declenchait. Deux nouveaux bugs ont ete identifies.
+
+## Probleme Constate
+
+**Graphique "Participations aux Jurys par Professeur"** :
+- Min observe : 8
+- Max observe : 12
+- Ecart : 4
+- `maxJuryLoadGap` configure : 2
+- Alertes attendues : "Repartition jury non equitable" + alertes individuelles
+- Alertes affichees : **AUCUNE**
+
+## Cause Racine 5 : `profJuryCount` ne comptait pas le role de president
+
+**Ancien code** dans `saveProjectPlanning()` :
+
+```java
+profJuryCount.merge(choice.rapporteur1.getIdp(), 1, Integer::sum);
+profJuryCount.merge(choice.rapporteur2.getIdp(), 1, Integer::sum);
+// MANQUANT : aucun increment pour le president (= encadrant)
+```
+
+**Probleme** : Un professeur qui encadre 5 etudiants devient president 5 fois. Mais `profJuryCount` restait a 0 pour ce role. L'algorithme considerait donc ce prof comme "peu charge" et lui ajoutait des roles de rapporteur par-dessus, produisant un total de **5 (president) + 5 (rapporteur) = 10** dans le graphique alors que l'algorithme pensait qu'il etait a 5.
+
+**Le graphique** appelle `PfeServiceImpl.getSoutenancesParProf()` qui compte president + rapporteur1 + rapporteur2 pour chaque soutenance :
+
+```java
+// Dans PfeServiceImpl.getSoutenancesParProf
+if (s.getJury().getPresident() != null) {
+    map.put(nom, map.getOrDefault(nom, 0) + 1);  // Compte le president
+}
+if (s.getJury().getRapporteur1() != null) {
+    map.put(nom, map.getOrDefault(nom, 0) + 1);  // Compte rapporteur 1
+}
+if (s.getJury().getRapporteur2() != null) {
+    map.put(nom, map.getOrDefault(nom, 0) + 1);  // Compte rapporteur 2
+}
+```
+
+**Resultat** : Le graphique mesurait une chose, l'algorithme en mesurait une autre. Ils etaient desynchronises.
+
+---
+
+## Cause Racine 6 : La verification utilisait la meme metrique erronee
+
+**Ancien code** dans `verifyJuryLoadDistribution()` :
+
+```java
+// Comptait UNIQUEMENT les rapporteurs, et UNE FOIS PAR PROJET (dedupliquait les binomes)
+Set<String> countedProjects = new HashSet<>();
+for (Soutenance soutenance : soutenances) {
+    String projKey = projectKey(etudiant);
+    if (!countedProjects.add(projKey)) continue;  // Skip les binomes !
+
+    if (jury.getRapporteur1() != null) {
+        juryCountByProfessor.merge(jury.getRapporteur1().getIdp(), 1, Integer::sum);
+    }
+    if (jury.getRapporteur2() != null) {
+        juryCountByProfessor.merge(jury.getRapporteur2().getIdp(), 1, Integer::sum);
+    }
+    // MANQUANT : pas de comptage du president
+}
+```
+
+**Probleme** : La verification ne voyait pas du tout la dimension la plus visible (le president = encadrant) et dedupliquait les binomes alors que le graphique les comptait deux fois. La verification ne pouvait donc jamais correspondre au graphique.
+
+---
+
+## Corrections Round 2
+
+### Fix 1 : Pre-population de `profJuryCount` avec les presidencies attendues
+
+**Fichier** : `services/PlanningServiceImpl.java` - methode `genererPlanning()`
+
+```java
+PlanningDates planningDates = buildPlanningDates(startDate, log);
+List<List<Affectation>> projects = groupAffectationsByProject(affectations);
+Collections.shuffle(projects);
+
+// ... NLP analysis et tri des projets ...
+
+// NOUVEAU : Pre-populer profJuryCount avec le nombre de soutenances que chaque
+// professeur va presider (une par etudiant qu'il encadre). Ainsi, l'equilibrage
+// de charge prend en compte la participation TOTALE (president + rapporteur),
+// correspondant a ce que le graphique du dashboard affiche.
+for (List<Affectation> project : projects) {
+    for (Affectation aff : project) {
+        if (aff.getEncadrant() != null && aff.getEncadrant().getIdp() != null) {
+            profJuryCount.merge(aff.getEncadrant().getIdp(), 1, Integer::sum);
+        }
+    }
+}
+
+for (List<Affectation> project : projects) {
+    // ... boucle de planification ...
+}
+```
+
+**Pourquoi** : Avant meme de placer la premiere soutenance, l'algorithme connait deja le futur "fardeau president" de chaque professeur. Quand il choisit ensuite les rapporteurs, le `globalMinLoad` et le `loadCeiling` reflètent la **charge totale**, pas seulement les rapporteurs.
+
+**Exemple concret** :
+- Prof A encadre 5 etudiants -> `profJuryCount[A] = 5` au depart
+- Prof B encadre 1 etudiant -> `profJuryCount[B] = 1` au depart
+- Avec `maxJuryLoadGap = 2`, `loadCeiling = minLoad + 2 = 1 + 2 = 3`
+- Prof A (a 5) est exclu des selections rapporteur car 5 > 3
+- Prof B (a 1) reste eligible
+- Resultat final : Prof A finit a 5 (juste president), Prof B finit a 1+2=3. Ecart = 2. OK.
+
+---
+
+### Fix 2 : Increment des rapporteurs par taille de projet
+
+**Fichier** : `services/PlanningServiceImpl.java` - methode `saveProjectPlanning()`
+
+```java
+// AVANT :
+profJuryCount.merge(choice.rapporteur1.getIdp(), 1, Integer::sum);
+profJuryCount.merge(choice.rapporteur2.getIdp(), 1, Integer::sum);
+
+// APRES :
+int projectSize = project.size();
+profJuryCount.merge(choice.rapporteur1.getIdp(), projectSize, Integer::sum);
+profJuryCount.merge(choice.rapporteur2.getIdp(), projectSize, Integer::sum);
+```
+
+**Pourquoi** : Le graphique compte les participations **par soutenance** (un binome = 2 soutenances pour le meme jury). Si on incremente seulement de 1 pour un binome, l'algorithme pense que le rapporteur a 1 participation alors que le graphique en affiche 2. En multipliant par `projectSize`, on s'aligne sur la metrique visible.
+
+---
+
+### Fix 3 : Reecriture de `verifyJuryLoadDistribution`
+
+**Fichier** : `services/VerificationServiceImpl.java`
+
+```java
+private void verifyJuryLoadDistribution(List<Soutenance> soutenances,
+                                        Map<Long, Affectation> affectationByStudent,
+                                        VerificationReport report) {
+    int maxJuryLoadGap = PlanningConfig.defaults().getMaxJuryLoadGap();
+
+    // Compter les participations TOTALES par professeur (president + rapporteur1 + rapporteur2),
+    // PAR SOUTENANCE - donc un binome compte deux fois pour le meme jury.
+    // Cela correspond exactement a la metrique affichee dans le graphique du dashboard
+    // "Participations aux Jurys par Professeur" (PfeServiceImpl.getSoutenancesParProf).
+    // L'algorithme et la verification operent maintenant sur les memes chiffres.
+    Map<Long, Integer> participationByProfessor = new LinkedHashMap<>();
+    Map<Long, String> namesByProfessor = new HashMap<>();
+
+    for (Professeur professeur : professeurDAO.findAll()) {
+        if (professeur.getIdp() == null) continue;
+        participationByProfessor.put(professeur.getIdp(), 0);
+        namesByProfessor.put(professeur.getIdp(), professorName(professeur));
+    }
+
+    // Plus de deduplication par projet : on compte TOUTES les soutenances.
+    for (Soutenance soutenance : soutenances) {
+        Jury jury = soutenance.getJury();
+        if (jury == null) continue;
+
+        countRole(jury.getPresident(), participationByProfessor, namesByProfessor);
+        countRole(jury.getRapporteur1(), participationByProfessor, namesByProfessor);
+        countRole(jury.getRapporteur2(), participationByProfessor, namesByProfessor);
+    }
+
+    // ... calcul min/max et generation des alertes ...
+}
+
+// Nouvelle methode utilitaire :
+private void countRole(Professeur professeur, Map<Long, Integer> participations,
+                       Map<Long, String> names) {
+    if (professeur == null || professeur.getIdp() == null) return;
+    participations.merge(professeur.getIdp(), 1, Integer::sum);
+    names.putIfAbsent(professeur.getIdp(), professorName(professeur));
+}
+```
+
+**Differences cles avec l'ancienne version** :
+
+| Element | Avant | Apres |
+|---------|-------|-------|
+| Roles comptes | rapporteur1 + rapporteur2 | president + rapporteur1 + rapporteur2 |
+| Deduplication binomes | OUI (skip si meme projet) | NON (compte chaque soutenance) |
+| Correspondance avec le graphique | Non | Oui |
+
+**Pourquoi cela corrige le silence du dashboard** :
+Avec l'ancienne metrique, un prof qui presidait 5 soutenances et etait rapporteur 2 fois etait compte comme "2 participations". Si tous les profs etaient a 2-4 rapporteurs, l'ecart paraissait acceptable et aucune alerte ne sortait. Maintenant, le meme prof est compte comme 5+2=7 participations, et l'ecart reel est detecte.
+
+---
+
+### Fix 4 : Filtre "count > 0" dans la generation des alertes individuelles
+
+**Ancien code** :
+```java
+for (Map.Entry<Long, Integer> entry : juryCountByProfessor.entrySet()) {
+    int count = entry.getValue();
+    if (count > minLoad + maxJuryLoadGap) {
+        report.addIssue("ALERTE", ...);
+    }
+}
+```
+
+**Nouveau code** :
+```java
+for (Map.Entry<Long, Integer> entry : participationByProfessor.entrySet()) {
+    int count = entry.getValue();
+    if (count > 0 && count > minLoad + maxJuryLoadGap) {  // <-- count > 0
+        report.addIssue("ALERTE", ...);
+    }
+}
+```
+
+**Pourquoi** : Un professeur avec 0 participations n'est pas "surcharge". Sans ce filtre, si `minLoad = 5` et un prof est a 0, on aurait fait `0 > 5 + 2` = false, donc OK ici. Mais le code precedent utilisait `count > minLoad + maxJuryLoadGap` ce qui est equivalent. Le `count > 0` evite plutot des cas oU `minLoad` lui-meme serait 0 (planning vide), ce qui pourrait declencher des alertes parasites.
+
+---
+
+## Resultat Attendu Round 2
+
+Pour le scenario du graphique (105+ soutenances, ~30 profs) :
+
+| Metrique | Avant Round 2 | Apres Round 2 |
+|----------|---------------|---------------|
+| Min participations (graphique) | 8 | proche de la moyenne |
+| Max participations (graphique) | 12 | minLoad + maxJuryLoadGap |
+| Ecart visible | 4 | <= 2 (configure) |
+| Alertes dashboard | 0 | Si ecart > 2, alertes correctes |
+| Algorithme et verification synchronises | NON | OUI |
+
+## Architecture des Donnees Apres Correctif
+
+```
+profJuryCount  =====  PfeServiceImpl.getSoutenancesParProf  =====  verifyJuryLoadDistribution
+   (algo)              (graphique dashboard)                          (alertes dashboard)
+       |                       |                                              |
+       +-----------------------+----------------------------------------------+
+                                          |
+                              MEME METRIQUE PARTOUT :
+                  Total participations (president + rapporteur1 + rapporteur2)
+                              compte par soutenance
+                          (un binome compte 2 fois)
+```
+
+Avant le correctif, ces trois consommateurs mesuraient des choses legerement differentes, ce qui rendait impossible toute coherence entre l'algorithme, l'affichage et les alertes.
+
+## Fichiers Modifies (Round 2)
+
+| Fichier | Nature du changement |
+|---------|---------------------|
+| `services/PlanningServiceImpl.java` | Pre-population avec presidencies + increment par projectSize |
+| `services/VerificationServiceImpl.java` | Comptage de tous les roles, pas de deduplication binome, methode `countRole` |

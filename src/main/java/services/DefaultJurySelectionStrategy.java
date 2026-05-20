@@ -33,16 +33,21 @@ public class DefaultJurySelectionStrategy implements JurySelectionStrategy {
             }
         }
 
-        // 2) "2 informaticiens" rule + load ceiling.
+        // 2) "2 informaticiens" rule + load ceiling. Strictest: respects both.
         Professeur[] pair = pickPair(candidates, profJuryCount, loadCeiling, encadrantIsInfo, true);
         if (pair != null) return pair;
 
-        // 3) Load ceiling without the informaticiens rule.
-        pair = pickPair(candidates, profJuryCount, loadCeiling, encadrantIsInfo, false);
+        // 3) "2 informaticiens" rule WITHOUT the load ceiling. The discipline rule
+        //    is treated as the higher-priority constraint: we prefer an unbalanced
+        //    jury load over a jury that lacks 2 informaticiens. If the load ceiling
+        //    is exceeded, the verification layer will surface it on the dashboard
+        //    so the user can rebalance manually if needed.
+        pair = pickPair(candidates, profJuryCount, Integer.MAX_VALUE, encadrantIsInfo, true);
         if (pair != null) return pair;
 
-        // 4) Last resort: ignore load ceiling but still try the informaticiens rule.
-        pair = pickPair(candidates, profJuryCount, Integer.MAX_VALUE, encadrantIsInfo, true);
+        // 4) Load ceiling only, dropping the informaticiens rule. Reached only when
+        //    there genuinely aren't enough info profs available at this slot.
+        pair = pickPair(candidates, profJuryCount, loadCeiling, encadrantIsInfo, false);
         if (pair != null) return pair;
 
         // 5) Absolute fallback: any 2 (least loaded first).
@@ -110,7 +115,17 @@ public class DefaultJurySelectionStrategy implements JurySelectionStrategy {
                     .filter(p -> infoSoFar >= 2 || isInfo(p))
                     .findFirst()
                     .orElse(null);
-            // If no info prof can be found while respecting ceiling, fall back to any prof under ceiling.
+            // If no info prof under the ceiling, prioritize the info rule over the
+            // load ceiling: try to find an info prof anywhere before falling back
+            // to any prof under the ceiling.
+            if (r2 == null && infoSoFar < 2) {
+                r2 = candidates.stream()
+                        .filter(p -> !p.getIdp().equals(selectedTechProf.getIdp()))
+                        .filter(this::isInfo)
+                        .findFirst()
+                        .orElse(null);
+            }
+            // Last fallback: any prof under the ceiling.
             if (r2 == null) {
                 r2 = candidates.stream()
                         .filter(p -> !p.getIdp().equals(selectedTechProf.getIdp()))

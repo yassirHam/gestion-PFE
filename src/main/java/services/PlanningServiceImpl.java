@@ -126,6 +126,18 @@ public class PlanningServiceImpl implements PlanningService {
                     profBusyAtSlot,profSchedule, profJuryCount, profDailyCount, roomBusy,nlpResult,
                     globalMinLoad);
 
+            // If no slot can satisfy the "2 informaticiens" hard constraint,
+            // retry with a relaxed strategy that drops the info rule as a last resort.
+            // This avoids leaving projects completely unscheduled.
+            if (bestChoice == null) {
+                bestChoice = findBestPlanningChoiceRelaxed(encadrant, juryPool, planningDates, slots, salles,
+                        profBusyAtSlot, profSchedule, profJuryCount, profDailyCount, roomBusy, globalMinLoad);
+                if (bestChoice != null) {
+                    log.add("ATTENTION: " + projectStudentNames(project)
+                            + " planifie sans 2 informaticiens (aucun creneau ne le permettait).");
+                }
+            }
+
             if (bestChoice != null) {
                 result.addAll(saveProjectPlanning( project, encadrant, bestChoice, planningDates, profBusyAtSlot,
                         profSchedule, profDailyCount, profJuryCount, roomBusy,
@@ -424,6 +436,65 @@ public class PlanningServiceImpl implements PlanningService {
             return encadrantDailyLoad < minDailyLoad;
         }
         return slotLoad < minSlotLoad;
+    }
+
+    /**
+     * Last-resort slot finder that ignores the "2 informaticiens" rule.
+     * Called only when findBestPlanningChoice returned null (no slot in the entire
+     * planning could satisfy the info constraint for this project).
+     */
+    private PlanningChoice findBestPlanningChoiceRelaxed(Professeur encadrant,
+                                                         List<Professeur> juryPool,
+                                                         PlanningDates planningDates,
+                                                         int[] slots,
+                                                         List<Salle> salles,
+                                                         Map<String, Set<Long>> profBusyAtSlot,
+                                                         Map<Long, List<String>> profSchedule,
+                                                         Map<Long, Integer> profJuryCount,
+                                                         Map<Long, Map<String, Integer>> profDailyCount,
+                                                         Map<String, Boolean> roomBusy,
+                                                         int globalMinLoad) {
+        PlanningChoice bestChoice = null;
+        int bestJuryMaxLoad = Integer.MAX_VALUE;
+        int minDailyLoad = Integer.MAX_VALUE;
+        int minSlotLoad = Integer.MAX_VALUE;
+
+        for (int dayIdx = 0; dayIdx < planningDates.validDates.size(); dayIdx++) {
+            String dateStr = planningDates.validDates.get(dayIdx);
+            int encadrantDailyLoad = profDailyCount.get(encadrant.getIdp()).getOrDefault(dateStr, 0);
+
+            for (int slot : slots) {
+                if (!isProfAvailable(encadrant.getIdp(), dateStr, slot, profBusyAtSlot, profSchedule)) {
+                    continue;
+                }
+                String slotKey = dateStr + "|" + slot;
+                Salle freeSalle = getFreeRoom(slotKey, salles, roomBusy);
+                if (freeSalle == null) continue;
+
+                List<Professeur> available = findAvailableProfessors(juryPool, dateStr, slot, profBusyAtSlot, profSchedule);
+                if (available.size() < 2) continue;
+
+                // Pick the 2 least-loaded profs without any info constraint
+                List<Professeur> sorted = new ArrayList<>(available);
+                sorted.sort(Comparator.comparingInt(p -> profJuryCount.getOrDefault(p.getIdp(), 0)));
+                Professeur p1 = sorted.get(0);
+                Professeur p2 = sorted.get(1);
+
+                int juryMaxLoad = Math.max(
+                        profJuryCount.getOrDefault(p1.getIdp(), 0),
+                        profJuryCount.getOrDefault(p2.getIdp(), 0));
+                int slotLoad = getSlotLoad(slotKey, salles, roomBusy);
+
+                if (isBetterChoice(juryMaxLoad, encadrantDailyLoad, slotLoad,
+                        bestJuryMaxLoad, minDailyLoad, minSlotLoad)) {
+                    bestChoice = new PlanningChoice(dayIdx, slot, freeSalle, p1, p2);
+                    bestJuryMaxLoad = juryMaxLoad;
+                    minDailyLoad = encadrantDailyLoad;
+                    minSlotLoad = slotLoad;
+                }
+            }
+        }
+        return bestChoice;
     }
 
     private int computeGlobalMinLoad(List<Professeur> juryPool, Map<Long, Integer> profJuryCount) {

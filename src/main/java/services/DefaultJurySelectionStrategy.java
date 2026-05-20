@@ -38,20 +38,17 @@ public class DefaultJurySelectionStrategy implements JurySelectionStrategy {
         if (pair != null) return pair;
 
         // 3) "2 informaticiens" rule WITHOUT the load ceiling. The discipline rule
-        //    is treated as the higher-priority constraint: we prefer an unbalanced
-        //    jury load over a jury that lacks 2 informaticiens. If the load ceiling
-        //    is exceeded, the verification layer will surface it on the dashboard
-        //    so the user can rebalance manually if needed.
+        //    is a HARD constraint: we always prefer an unbalanced jury load over a
+        //    jury that lacks 2 informaticiens. The load gap verification will
+        //    surface any imbalance on the dashboard.
         pair = pickPair(candidates, profJuryCount, Integer.MAX_VALUE, encadrantIsInfo, true);
         if (pair != null) return pair;
 
-        // 4) Load ceiling only, dropping the informaticiens rule. Reached only when
-        //    there genuinely aren't enough info profs available at this slot.
-        pair = pickPair(candidates, profJuryCount, loadCeiling, encadrantIsInfo, false);
-        if (pair != null) return pair;
-
-        // 5) Absolute fallback: any 2 (least loaded first).
-        return new Professeur[]{candidates.get(0), candidates.get(1)};
+        // 4) Return null to REJECT this slot entirely. This forces the caller
+        //    (findBestPlanningChoice) to try a different slot/day where 2 info
+        //    profs ARE available. Only if ALL slots are exhausted will the project
+        //    fail to be scheduled (logged as "Impossible de planifier").
+        return null;
     }
 
     /**

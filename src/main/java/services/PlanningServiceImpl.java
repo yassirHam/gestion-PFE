@@ -47,6 +47,26 @@ public class PlanningServiceImpl implements PlanningService {
     @Override
     public List<Soutenance> genererPlanning(List<String> filieres, List<String> log, List<Long> selectedSalles,
                                             String startDate) {
+        return genererPlanning(filieres, log, selectedSalles, startDate, null);
+    }
+
+    @Override
+    public List<Soutenance> genererPlanning(List<String> filieres, List<String> log, List<Long> selectedSalles,
+                                            String startDate, int[] customSlots) {
+        PlanningConfig activeConfig = this.config;
+        if (customSlots != null && customSlots.length > 0) {
+            activeConfig = new PlanningConfig(
+                    customSlots,
+                    config.getDefaultStartYear(),
+                    config.getDefaultStartMonth(),
+                    config.getDefaultStartDay(),
+                    config.getMaxDays(),
+                    config.getDefaultRooms(),
+                    config.getProfessorColorPalette(),
+                    config.getMaxJuryLoadGap()
+            );
+        }
+
         List<Affectation> affectations = filterAffectationsByFiliere(affDao.findAllWithDetails(), filieres);
         if (affectations.isEmpty()) {
             log.add("Aucune affectation trouvee pour les filieres selectionnees.");
@@ -86,7 +106,7 @@ public class PlanningServiceImpl implements PlanningService {
 
         Map<String, SujetAnalysis> nlpBatchResults = analyzeProjectSubjects(projects, allProfs, log);
         List<Soutenance> result = new ArrayList<>();
-        int[] slots = config.getSlots();
+        int[] slots = activeConfig.getSlots();
 
         for (List<Affectation> project : projects) {
             Affectation mainAff = project.get(0);
@@ -106,7 +126,7 @@ public class PlanningServiceImpl implements PlanningService {
                         log));
             } else {
                 log.add("Impossible de planifier: " + projectStudentNames(project)
-                        + " (aucun creneau valide dans les " + config.getMaxDays() + " jours)");
+                        + " (aucun creneau valide dans les " + activeConfig.getMaxDays() + " jours)");
             }
         }
 

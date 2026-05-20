@@ -448,6 +448,11 @@ public class PfeServiceImpl implements PfeService {
     }
 
     @Override
+    public List<Soutenance> genererPlanning(List<String> filieres, List<String> debugLog, List<Long> selectedSalles, String startDate, int[] customSlots) {
+        return planningService.genererPlanning(filieres, debugLog, selectedSalles, startDate, customSlots);
+    }
+
+    @Override
     public List<Soutenance> getAllSoutenances() {
         return planningService.getAllSoutenances();
     }

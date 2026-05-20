@@ -1148,7 +1148,30 @@ public class FrontController extends HttpServlet {
 
         String startDate = req.getParameter("startDate");
 
-        service.genererPlanning(lastFilieres, debug, selectedSalles, startDate);
+        // Parse custom hour slots from form
+        int[] customSlots = null;
+        String startHourStr = req.getParameter("startHour");
+        String endHourStr = req.getParameter("endHour");
+        if (startHourStr != null && endHourStr != null && !startHourStr.trim().isEmpty() && !endHourStr.trim().isEmpty()) {
+            try {
+                int startHour = Integer.parseInt(startHourStr.trim());
+                int endHour = Integer.parseInt(endHourStr.trim());
+                if (startHour >= 8 && endHour <= 18 && startHour < endHour) {
+                    List<Integer> slotList = new ArrayList<>();
+                    for (int h = startHour; h <= endHour; h++) {
+                        // Skip lunch break (12h-13h)
+                        if (h == 12 || h == 13) continue;
+                        slotList.add(h);
+                    }
+                    customSlots = slotList.stream().mapToInt(Integer::intValue).toArray();
+                    debug.add("Creneaux personnalises: " + startHour + "h - " + endHour + "h (" + customSlots.length + " slots)");
+                }
+            } catch (NumberFormatException ignored) {
+                debug.add("Format d'heure invalide, utilisation des creneaux par defaut.");
+            }
+        }
+
+        service.genererPlanning(lastFilieres, debug, selectedSalles, startDate, customSlots);
 
         List<Soutenance> soutenances = service.getAllSoutenances();
         Map<Long, String> colors = service.getProfessorColors();

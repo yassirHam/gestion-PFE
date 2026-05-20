@@ -241,7 +241,35 @@
                     </div>
 
                     <label class="form-label small fw-semibold text-muted">Date de début des soutenances</label>
-                    <input type="date" class="form-control mb-4" name="startDate" value="2026-06-23" required>
+                    <input type="date" class="form-control mb-3" name="startDate" value="2026-06-23" required>
+
+                    <label class="form-label small fw-semibold text-muted">Créneaux horaires</label>
+                    <div class="row g-2 mb-4">
+                        <div class="col-6">
+                            <label class="form-label small text-muted">Début</label>
+                            <select class="form-select form-select-sm" name="startHour" id="startHour">
+                                <option value="8">08h00</option>
+                                <option value="9" selected>09h00</option>
+                                <option value="10">10h00</option>
+                                <option value="11">11h00</option>
+                                <option value="14">14h00</option>
+                                <option value="15">15h00</option>
+                                <option value="16">16h00</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <label class="form-label small text-muted">Fin</label>
+                            <select class="form-select form-select-sm" name="endHour" id="endHour">
+                                <option value="11">11h00</option>
+                                <option value="14">14h00</option>
+                                <option value="15">15h00</option>
+                                <option value="16">16h00</option>
+                                <option value="17" selected>17h00</option>
+                                <option value="18">18h00</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="text-muted small mb-4"><i class="fa-solid fa-info-circle me-1"></i>La pause déjeuner (12h-14h) est automatiquement exclue.</p>
 
                     <button type="submit" class="btn btn-primary w-100" ${!hasAffectations ? 'disabled' : ''}>
                         <c:choose>
@@ -277,6 +305,25 @@
                     checkbox.checked = false;
                 });
             });
+        }
+
+        // Hour slot validation
+        const startHour = document.getElementById('startHour');
+        const endHour = document.getElementById('endHour');
+
+        function validateHours() {
+            const start = parseInt(startHour.value);
+            const end = parseInt(endHour.value);
+            if (end <= start) {
+                endHour.classList.add('is-invalid');
+            } else {
+                endHour.classList.remove('is-invalid');
+            }
+        }
+
+        if (startHour && endHour) {
+            startHour.addEventListener('change', validateHours);
+            endHour.addEventListener('change', validateHours);
         }
     });
 </script>

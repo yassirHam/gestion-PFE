@@ -1,0 +1,39 @@
+﻿<?xml version="1.0" encoding="UTF-8"?>
+
+
+<hibernate-configuration>
+    <session-factory>
+
+        <!-- ===== Connexion MySQL ===== -->
+        <property name="connection.driver_class">com.mysql.cj.jdbc.Driver</property>
+        <property name="connection.url">jdbc:mysql://localhost:3306/GestionPFE?createDatabaseIfNotExist=true&amp;useSSL=false&amp;serverTimezone=UTC&amp;allowPublicKeyRetrieval=true</property>
+        <property name="connection.username">root</property>
+        <property name="connection.password"></property>
+
+        <!-- ===== Dialecte Hibernate 6 ===== -->
+        <property name="hibernate.dialect">org.hibernate.dialect.MySQLDialect</property>
+        <!-- Hibernate met a jour le schema sans supprimer les tables. -->
+        <property name="hibernate.hbm2ddl.auto">update</property>
+
+        <!-- ===== Logs SQL (mettre false en prod) ===== -->
+        <property name="hibernate.show_sql">true</property>
+        <property name="hibernate.format_sql">false</property>
+
+        <!-- ===== Pool de connexions basique ===== -->
+        <property name="hibernate.connection.pool_size">50</property>
+        <property name="hibernate.jdbc.time_zone">UTC</property>
+        <property name="hibernate.cache.use_second_level_cache">false</property>
+
+        <!-- ===== Entités ===== -->
+        <mapping class="entities.Etudiant"/>
+        <mapping class="entities.Professeur"/>
+        <mapping class="entities.Affectation"/>
+        <mapping class="entities.FichierListe"/>
+        <mapping class="entities.Soutenance"/>
+        <mapping class="entities.Salle"/>
+        <mapping class="entities.Jury"/>
+        <mapping class="entities.AppSettings"/>
+
+
+    </session-factory>
+</hibernate-configuration>

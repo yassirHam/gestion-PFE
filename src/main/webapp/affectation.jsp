@@ -101,7 +101,7 @@
     <!-- ================= UNIFIED EXCEL IMPORT ================= -->
     <div class="card p-3 p-md-4 mb-4">
 
-        <h5 class="fw-bold mb-3"><i class="fa-solid fa-file-excel text-success me-2"></i> Import unifié des données</h5>
+        <h5 class="fw-bold mb-3"><i class="fa-solid fa-file-excel text-success me-2"></i> Import des données</h5>
         <p class="text-muted small mb-3">
             Téléversez <strong>un seul fichier Excel</strong> contenant plusieurs feuilles (une par filière, plus une feuille
             <code>Professeurs</code> et, optionnellement, une feuille <code>Salles</code>).

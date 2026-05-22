@@ -1,0 +1,8 @@
+# =====================================================
+# TEMPLATE de config — copier comme config.properties
+# et remplir avec VOS vraies valeurs
+# =====================================================
+
+nvidia.api.key=VOTRE_CLE_API_NVIDIA_ICI
+nvidia.base.url=https://integrate.api.nvidia.com/v1
+nvidia.model=meta/llama-3.3-70b-instruct

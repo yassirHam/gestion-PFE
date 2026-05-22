@@ -15,7 +15,21 @@ public class SalleDAOImpl implements SalleDAO {
     @Override
     public List<Salle> findAll() {
         try (Session session = sf.openSession()) {
-            return session.createQuery("from Salle order by num_salle", Salle.class).list();
+            return session.createQuery(
+                    "select s from Salle s left join fetch s.department order by s.priority desc, s.num_salle",
+                    Salle.class).list();
+        }
+    }
+
+    @Override
+    public List<Salle> findAvailable() {
+        try (Session session = sf.openSession()) {
+            return session.createQuery(
+                    "select s from Salle s " +
+                    " left join fetch s.department " +
+                    " where s.available = true " +
+                    " order by s.priority desc, s.num_salle",
+                    Salle.class).list();
         }
     }
 
@@ -32,7 +46,9 @@ public class SalleDAOImpl implements SalleDAO {
         Transaction tx = null;
         try (Session session = sf.openSession()) {
             tx = session.beginTransaction();
-            session.persist(salle);
+            // merge() rather than persist() so this method also updates
+            // existing rows (used by the governance UI).
+            session.merge(salle);
             tx.commit();
         } catch (Exception e) {
             if (tx != null) tx.rollback();
@@ -106,6 +122,23 @@ public class SalleDAOImpl implements SalleDAO {
     public long count() {
         try (Session session = sf.openSession()) {
             return session.createQuery("select count(s) from Salle s", Long.class).uniqueResult();
+        }
+    }
+
+    @Override
+    public void setAvailable(Long id, boolean available) {
+        if (id == null) return;
+        Transaction tx = null;
+        try (Session session = sf.openSession()) {
+            tx = session.beginTransaction();
+            session.createMutationQuery("update Salle set available = :a where id_salle = :id")
+                    .setParameter("a", available)
+                    .setParameter("id", id)
+                    .executeUpdate();
+            tx.commit();
+        } catch (Exception e) {
+            if (tx != null) tx.rollback();
+            e.printStackTrace();
         }
     }
 }

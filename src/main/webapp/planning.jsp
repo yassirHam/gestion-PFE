@@ -1,6 +1,7 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
 <%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
 <%@ taglib uri="http://java.sun.com/jsp/jstl/fmt"  prefix="fmt" %>
+<%@ taglib uri="http://java.sun.com/jsp/jstl/functions" prefix="fn" %>
 
 <!DOCTYPE html>
 <html lang="fr">
@@ -59,6 +60,46 @@
             <p class="text-muted mb-0 d-none d-md-block">Configurez, générez et téléchargez le planning des soutenances PFE.</p>
         </div>
     </div>
+
+    <!-- ============================================================
+         OPERATIONAL STATUS & QUICK ACTIONS
+         ============================================================ -->
+    <c:if test="${not empty currentVersion or not empty activeSession}">
+        <div class="card border-0 shadow-sm mb-4">
+            <div class="card-body py-3 d-flex flex-wrap gap-3 align-items-center">
+                <c:if test="${not empty activeSession}">
+                    <div>
+                        <span class="text-tiny text-uppercase text-muted">Session</span><br>
+                        <strong><c:out value="${activeSession.displayName}"/></strong>
+                    </div>
+                </c:if>
+                <c:if test="${not empty currentVersion}">
+                    <div>
+                        <span class="text-tiny text-uppercase text-muted">Version</span><br>
+                        <strong><c:out value="${currentVersion.displayName}"/></strong>
+                        <span class="badge bg-${currentVersion.state.bootstrap}"><c:out value="${currentVersion.state.label}"/></span>
+                        <c:if test="${not empty currentVersion.frozenAt}">
+                            <span class="badge bg-info"><i class="fa-solid fa-snowflake"></i> figée</span>
+                        </c:if>
+                    </div>
+                </c:if>
+                <div class="ms-auto d-flex gap-2">
+                    <a href="approvals.do" class="btn btn-sm btn-outline-primary">
+                        <i class="fa-solid fa-circle-check me-1"></i> Cycle de validation
+                    </a>
+                    <a href="exceptions.do" class="btn btn-sm btn-outline-warning">
+                        <i class="fa-solid fa-triangle-exclamation me-1"></i> Incidents
+                        <c:if test="${not empty openExceptions and fn:length(openExceptions) > 0}">
+                            <span class="badge bg-warning text-dark">${fn:length(openExceptions)}</span>
+                        </c:if>
+                    </a>
+                    <a href="notifications.do" class="btn btn-sm btn-outline-secondary">
+                        <i class="fa-solid fa-paper-plane me-1"></i> Convocations
+                    </a>
+                </div>
+            </div>
+        </div>
+    </c:if>
 
     <!-- ============================================================
          FAILED PLANNING ALERT (HARD constraint violations)
@@ -420,6 +461,166 @@
         refreshRecommendations();
     });
 </script>
+
+<!-- ─── Operational soutenance actions ─────────────────── -->
+<c:if test="${not empty soutenances}">
+    <div class="container py-3">
+        <div class="card p-3 p-md-4">
+            <h5 class="fw-bold mb-3"><i class="fa-solid fa-screwdriver-wrench text-primary me-2"></i> Actions opérationnelles par soutenance</h5>
+            <p class="text-muted small">Verrouiller, annuler, reporter ou remplacer un membre du jury sans relancer toute la génération.</p>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Date</th><th>Heure</th><th>Étudiant</th><th>Salle</th><th>Jury</th><th>État</th><th class="text-end">Actions</th></tr></thead>
+                    <tbody>
+                    <c:forEach var="s" items="${soutenances}">
+                        <tr>
+                            <td class="text-tiny"><fmt:formatDate value="${s.date}" pattern="yyyy-MM-dd"/></td>
+                            <td>${s.heure}</td>
+                            <td><c:out value="${s.etudiant.nomE} ${s.etudiant.prenomE}"/><div class="text-tiny text-muted"><c:out value="${s.etudiant.filiere}"/></div></td>
+                            <td><c:out value="${s.salle.num_salle}"/></td>
+                            <td class="text-tiny">
+                                P: <c:out value="${s.jury.president.nom}"/>
+                                &middot; R1: <c:out value="${s.jury.rapporteur1.nom}"/>
+                                &middot; R2: <c:out value="${s.jury.rapporteur2.nom}"/>
+                                <c:if test="${not empty s.jury.invite}">&middot; Inv: <c:out value="${s.jury.invite.nom}"/></c:if>
+                            </td>
+                            <td>
+                                <span class="badge bg-${s.status.bootstrap} badge-state"><c:out value="${s.status.label}"/></span>
+                                <c:if test="${s.locked}"><i class="fa-solid fa-lock text-warning ms-1" title="Verrouillée"></i></c:if>
+                                <c:if test="${s.manualOverride}"><i class="fa-solid fa-hand-pointer text-info ms-1" title="Modifiée manuellement"></i></c:if>
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <c:choose>
+                                        <c:when test="${s.locked}">
+                                            <form method="post" action="unlockSoutenance.do" class="d-inline">
+                                                <input type="hidden" name="id" value="${s.ids}">
+                                                <button class="btn btn-outline-success" title="Déverrouiller"><i class="fa-solid fa-lock-open"></i></button>
+                                            </form>
+                                        </c:when>
+                                        <c:otherwise>
+                                            <form method="post" action="lockSoutenance.do" class="d-inline">
+                                                <input type="hidden" name="id" value="${s.ids}">
+                                                <button class="btn btn-outline-warning" title="Verrouiller"><i class="fa-solid fa-lock"></i></button>
+                                            </form>
+                                        </c:otherwise>
+                                    </c:choose>
+                                    <button class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#postpone-${s.ids}" title="Reporter"><i class="fa-solid fa-clock-rotate-left"></i></button>
+                                    <button class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancel-${s.ids}" title="Annuler"><i class="fa-solid fa-ban"></i></button>
+                                    <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#swap-${s.ids}" title="Remplacer un jury"><i class="fa-solid fa-shuffle"></i></button>
+                                    <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#salle-${s.ids}" title="Changer de salle"><i class="fa-solid fa-door-open"></i></button>
+                                    <button class="btn btn-outline-warning" data-bs-toggle="modal" data-bs-target="#reportExc-${s.ids}" title="Signaler un incident"><i class="fa-solid fa-triangle-exclamation"></i></button>
+                                </div>
+                            </td>
+                        </tr>
+                        <!-- Postpone -->
+                        <div class="modal fade" id="postpone-${s.ids}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <form method="post" action="postponeSoutenance.do" class="modal-content">
+                                    <input type="hidden" name="id" value="${s.ids}">
+                                    <div class="modal-header"><h5 class="modal-title">Reporter cette soutenance</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body"><label>Motif</label><textarea name="reason" class="form-control" rows="2"></textarea></div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button><button class="btn btn-info">Reporter</button></div>
+                                </form>
+                            </div>
+                        </div>
+                        <!-- Cancel -->
+                        <div class="modal fade" id="cancel-${s.ids}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <form method="post" action="cancelSoutenance.do" class="modal-content">
+                                    <input type="hidden" name="id" value="${s.ids}">
+                                    <div class="modal-header"><h5 class="modal-title">Annuler cette soutenance</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body"><label>Motif</label><textarea name="reason" class="form-control" rows="2"></textarea></div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button><button class="btn btn-danger">Annuler la soutenance</button></div>
+                                </form>
+                            </div>
+                        </div>
+                        <!-- Swap jury member -->
+                        <div class="modal fade" id="swap-${s.ids}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <form method="post" action="swapJuryMember.do" class="modal-content">
+                                    <input type="hidden" name="juryId" value="${s.jury.idJury}">
+                                    <div class="modal-header"><h5 class="modal-title">Remplacer un membre de jury</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body row g-2">
+                                        <div class="col-md-6"><label>Rôle</label>
+                                            <select name="role" class="form-select">
+                                                <option value="P">Président — <c:out value="${s.jury.president.nom}"/></option>
+                                                <option value="R1">Rapporteur 1 — <c:out value="${s.jury.rapporteur1.nom}"/></option>
+                                                <option value="R2">Rapporteur 2 — <c:out value="${s.jury.rapporteur2.nom}"/></option>
+                                                <option value="INV">Invité</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-md-6"><label>Remplaçant</label>
+                                            <select name="replacementProfId" class="form-select" required>
+                                                <option value="">— Choisir —</option>
+                                                <c:forEach var="p" items="${allProfs}">
+                                                    <c:if test="${not p.excluded}">
+                                                        <option value="${p.idp}"><c:out value="${p.nom} ${p.prenom}"/> — <c:out value="${p.discipline}"/></option>
+                                                    </c:if>
+                                                </c:forEach>
+                                            </select>
+                                        </div>
+                                        <div class="col-12"><label>Motif</label><input type="text" name="reason" class="form-control"></div>
+                                    </div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button><button class="btn btn-primary">Remplacer</button></div>
+                                </form>
+                            </div>
+                        </div>
+                        <!-- Replace salle -->
+                        <div class="modal fade" id="salle-${s.ids}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <form method="post" action="replaceSalle.do" class="modal-content">
+                                    <input type="hidden" name="id" value="${s.ids}">
+                                    <div class="modal-header"><h5 class="modal-title">Changer de salle</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body">
+                                        <label>Nouvelle salle</label>
+                                        <select name="salleId" class="form-select" required>
+                                            <c:forEach var="sl" items="${salles}">
+                                                <c:if test="${sl.available}">
+                                                    <option value="${sl.id_salle}" ${sl.id_salle == s.salle.id_salle ? 'disabled' : ''}>
+                                                        <c:out value="${sl.num_salle}"/> <c:if test="${not empty sl.block}">— <c:out value="${sl.block}"/></c:if>
+                                                    </option>
+                                                </c:if>
+                                            </c:forEach>
+                                        </select>
+                                    </div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button><button class="btn btn-primary">Enregistrer</button></div>
+                                </form>
+                            </div>
+                        </div>
+                        <!-- Report exception -->
+                        <div class="modal fade" id="reportExc-${s.ids}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <form method="post" action="reportException.do" class="modal-content">
+                                    <input type="hidden" name="soutenanceId" value="${s.ids}">
+                                    <div class="modal-header"><h5 class="modal-title">Signaler un incident</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body row g-2">
+                                        <div class="col-12">
+                                            <label>Type</label>
+                                            <select name="type" class="form-select">
+                                                <option value="STUDENT_ABSENT">Étudiant absent</option>
+                                                <option value="PROFESSOR_ABSENT">Professeur absent</option>
+                                                <option value="JURY_REPLACEMENT_NEEDED">Remplacement de jury demandé</option>
+                                                <option value="ROOM_UNAVAILABLE">Salle indisponible</option>
+                                                <option value="DELAY">Soutenance retardée</option>
+                                                <option value="CANCELLED">Soutenance annulée</option>
+                                                <option value="SUBJECT_CHANGED">Sujet modifié</option>
+                                                <option value="OTHER">Autre</option>
+                                            </select>
+                                        </div>
+                                        <div class="col-12"><label>Description</label><textarea name="description" class="form-control" rows="3"></textarea></div>
+                                    </div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fermer</button><button class="btn btn-warning">Signaler</button></div>
+                                </form>
+                            </div>
+                        </div>
+                    </c:forEach>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</c:if>
 
     </div>
 </div>

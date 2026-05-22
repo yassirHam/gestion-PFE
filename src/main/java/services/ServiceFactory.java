@@ -8,6 +8,11 @@ import dao.ProfesseurDAOImpl;
 import dao.SalleDAOImpl;
 import dao.SoutenanceDAOImpl;
 
+/**
+ * Lightweight factory used by the controller (no DI container). Holds
+ * static getters for every singleton service; collaborator services are
+ * exposed via their own {@code getInstance()} method.
+ */
 public final class ServiceFactory {
 
     private ServiceFactory() {
@@ -35,4 +40,15 @@ public final class ServiceFactory {
     public static RecommendationService createRecommendationService() {
         return new RecommendationServiceImpl();
     }
+
+    // ─── Operational services (singletons) ─────────────────────────────────
+
+    public static AuthService authService() { return AuthService.getInstance(); }
+    public static AuditService auditService() { return AuditService.getInstance(); }
+    public static SessionService sessionService() { return SessionService.getInstance(); }
+    public static ApprovalWorkflowService approvalService() { return ApprovalWorkflowService.getInstance(); }
+    public static ManualOverrideService overrideService() { return ManualOverrideService.getInstance(); }
+    public static ExceptionManagementService exceptionService() { return ExceptionManagementService.getInstance(); }
+    public static NotificationService notificationService() { return NotificationService.getInstance(); }
+    public static GovernanceService governanceService() { return GovernanceService.getInstance(); }
 }

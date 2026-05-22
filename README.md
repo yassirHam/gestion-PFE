@@ -207,3 +207,87 @@ Export your data to PDF or DOCX. Use the PVs page to generate individual or bulk
 | `/exportDocx.do` | Export affectations as DOCX |
 | `/planningPdf.do` | Export planning as PDF |
 | `/planningDocx.do` | Export planning as DOCX |
+
+
+
+---
+
+## Operational Administration Layer (v2)
+
+The platform was extended to behave as a full soutenance management platform
+rather than a one-shot generator. Every change is additive: the original
+workflow (import → affect → plan → export) keeps working unchanged.
+
+### What's new
+
+| Concern | Implementation |
+| --- | --- |
+| **Authentication & roles** | `AppUser` entity + PBKDF2 password hashing in `AuthService`. A bootstrap admin (`admin/admin`) is created automatically on first start. Five roles: `ADMIN_PEDAGOGIQUE`, `CHEF_DEPARTEMENT`, `COORDINATEUR_FILIERE`, `PROFESSEUR`, `CONSULTATION`. |
+| **Sessions & versions** | `AcademicSession` ("Session Juin 2026") groups one or more `PlanningVersion`s ("Version 1", "Version finale"). Exactly one session is active and one version per session is current. Frozen / published versions become immutable. |
+| **Validation lifecycle** | `LifecycleState` (DRAFT → PENDING_VALIDATION → VALIDATED → PUBLISHED → ARCHIVED, plus REJECTED) on every affectation and planning version. Transitions go through `ApprovalWorkflowService` and are role-gated. |
+| **Approval chain** | `Approval` records every decision (request / approve / reject / publish / archive) with actor, role, timestamp and comment. |
+| **Publication freeze** | Publishing a version locks every `Soutenance` it contains (`Soutenance.locked = true`, status `LOCKED`). The next planning regeneration preserves locked soutenances and only recomputes the rest. |
+| **Manual overrides** | `ManualOverrideService` exposes lock/unlock soutenance, postpone, cancel, replace salle, swap a single jury member, force an encadrant, lock affectation, exclude/reinstate professor — without re-running the whole engine. |
+| **Conflict resolution** | When a hard constraint is violated, the engine still surfaces the violations and unscheduled projects; locked soutenances are preserved so the operator can fix the rest. |
+| **Exception management** | `SoutenanceException` records (student/prof absent, room unavailable, jury replacement, delay, cancellation). Reported through the planning grid, resolved with a chosen action (acknowledge / postpone / cancel / mark completed). |
+| **Communication** | `Notification` table + `NotificationService` queues student and jury convocations, then dispatches them via SMTP when configured (plain Java SMTP/STARTTLS client, no extra dependency). When SMTP is off, notifications stay queued for review. |
+| **Audit log** | `AuditLog` records every state change (login, generation, override, validation, publication…) with actor, target type/id, summary and remote IP. |
+| **Governance** | `Department` entity owns rooms, professors, filière codes, quotas. Rooms gain `priority`, `available`, `capacity`, `equipment`, `campus`. Professors gain `grade`, `internal/external`, `languages`, `maxSoutenancesPerDay`, `vip`, `excluded`. `ProfesseurAvailability` lets each professor declare per-date AM/PM unavailability. |
+| **Resource prioritization** | `Etudiant.priority` is honored by the planner (urgent students scheduled first). VIP professors are taken into account. High-priority salles are filled first. |
+| **Multi-campus / multi-department** | Optional `campus` field on rooms and on `AppSettings.defaultCampus`; sessions can be scoped to one department. The single mono-admin model is replaced by per-department ownership. |
+| **Richer professor constraints** | New constraint IDs in `ConstraintIds` / `ConstraintSet`: `MIN_PRESIDENT_GRADE`, `REQUIRE_EXTERNAL_MEMBER`, `MAX_SOUTENANCES_PER_HALFDAY`, `AVOID_CONSECUTIVE_DEFENSES`, `MAX_JURY_REPETITION`, `RESPECT_PROF_UNAVAILABILITY`, `RESPECT_LANGUAGE_REQUIREMENT`, `SPECIALTY_COMPATIBILITY`, `RESPECT_SESSION_DEADLINE`, `FORBID_CONSECUTIVE_SLOTS`. Each one is editable in the configuration page (the existing form iterates `ConstraintSet.defaults()`). |
+
+### New routes
+
+```
+Authentication                /login.do  /logout.do
+User management               /users.do  /saveUser.do  /deleteUser.do  /changeUserPassword.do
+Sessions / versions           /sessions.do  /createSession.do  /activateSession.do  /closeSession.do
+                              /createVersion.do  /setCurrentVersion.do  /deleteVersion.do
+Approval chain                /approvals.do  /requestApproval.do  /approve.do  /reject.do
+                              /publishVersion.do  /freezeVersion.do  /archiveVersion.do
+Manual overrides              /lockSoutenance.do  /unlockSoutenance.do  /cancelSoutenance.do
+                              /postponeSoutenance.do  /replanSoutenance.do  /replaceSalle.do
+                              /swapJuryMember.do  /lockJury.do
+                              /forceAffectation.do  /lockAffectation.do  /transitionAffectation.do
+                              /excludeProf.do  /reinstateProf.do
+Exceptions                    /exceptions.do  /reportException.do  /resolveException.do
+Notifications                 /notifications.do  /sendConvocations.do  /sendReminders.do
+                              /dispatchNotifications.do
+Governance                    /departments.do  /saveDepartment.do  /deleteDepartment.do
+                              /profGovernance.do  /saveProfGovernance.do
+                              /profAvailability.do  /saveProfAvailability.do  /deleteProfAvailability.do
+                              /salleGovernance.do  /saveSalleGovernance.do
+Audit / SMTP                  /audit.do  /saveSmtp.do
+```
+
+All `*.do` requests are filtered by `AuthFilter`, which redirects unauthenticated
+users to `/login.do` and applies per-route role checks.
+
+### First start
+
+1. Build and deploy the WAR as before (`mvn clean package`, copy to Tomcat).
+2. Open the application — you will be redirected to `/login.do`.
+3. Log in with **`admin / admin`**, then immediately go to **Utilisateurs** and
+   change the bootstrap password.
+4. Create at least one academic session in **Sessions** (the system also
+   bootstraps a default session if none exists). Optionally create departments,
+   assign rooms/professors, and let professors declare unavailability.
+5. The original workflow (import → affect → plan → export) is unchanged. New
+   tabs (Sessions, Approbations, Incidents, Convocations, Gouvernance, Audit)
+   appear in the sidebar according to the user's role.
+
+### Notes for operators
+
+- **Publishing freezes**: once a planning version is published, every soutenance
+  inside is locked. To change anything, unlock the soutenance, swap a jury
+  member, or report an exception — never delete the version.
+- **Manual overrides leave traces**: every action goes through the audit log
+  (`/audit.do`).
+- **SMTP is optional**: when not configured, notifications are stored in the
+  database and the operator can dispatch them later when SMTP is enabled.
+- **Bootstrap data**: a default `admin` user and a default `DEFAULT-<year>`
+  session are created on first start so the application is immediately usable.
+- **No new dependencies were added**: the password hashing relies on
+  `javax.crypto.SecretKeyFactory` (PBKDF2WithHmacSHA256), and the SMTP client is
+  written directly on top of `java.net.Socket` and `javax.net.ssl.SSLSocket`.

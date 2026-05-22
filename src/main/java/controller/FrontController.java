@@ -247,6 +247,30 @@ public class FrontController extends HttpServlet {
             // Settings table may not exist yet on first boot; pages have safe defaults.
         }
 
+        // Make the authenticated user and active session available to every JSP.
+        try {
+            entities.AppUser currentUser = AuthFilter.currentUser(req);
+            if (currentUser != null) req.setAttribute("currentUser", currentUser);
+            req.setAttribute("activeSession", services.SessionService.getInstance().getActive());
+            req.setAttribute("currentVersion",
+                    services.SessionService.getInstance().getCurrentVersion(
+                            req.getAttribute("activeSession") instanceof entities.AcademicSession
+                                    ? ((entities.AcademicSession) req.getAttribute("activeSession")).getId()
+                                    : null));
+        } catch (Exception ignored) {}
+
+        // Promote any flash attributes set by sibling controllers (login, overrides, etc.)
+        for (String name : new String[]{"flashOk", "flashError", "flashInfo"}) {
+            javax.servlet.http.HttpSession session = req.getSession(false);
+            if (session != null) {
+                Object v = session.getAttribute(name);
+                if (v != null) {
+                    req.setAttribute(name, v);
+                    session.removeAttribute(name);
+                }
+            }
+        }
+
         switch (path) {
             case "/dashboard.do":
                 doDashboard(req, resp);
@@ -490,6 +514,14 @@ public class FrontController extends HttpServlet {
         java.util.Collections.sort(historyTimestamps, java.util.Collections.reverseOrder());
         req.setAttribute("historyTimestamps", historyTimestamps);
 
+        // Operational extensions: list of all affectations (for lifecycle/force ops),
+        // and the available professor pool for force-affectation modal.
+        try {
+            req.setAttribute("allAffectations", service.getAllAffectationsWithDetails());
+            req.setAttribute("allProfs", new dao.ProfesseurDAOImpl().findAll());
+            req.setAttribute("lifecycleStates", entities.LifecycleState.values());
+        } catch (Exception ignored) {}
+
         req.getRequestDispatcher("affectation.jsp").forward(req, resp);
     }
     
@@ -656,6 +688,13 @@ public class FrontController extends HttpServlet {
         debug.add("Filières sélectionnées: " + String.join(", ", filieres));
 
         service.lancerAffectationGlobale(filieres, debug);
+
+        // Audit
+        try {
+            services.AuditService.getInstance().record(AuthFilter.currentUser(req),
+                    entities.AuditAction.AFFECTATION_CREATED, "Affectation", null,
+                    "Affectation lancée pour " + String.join(", ", filieres));
+        } catch (Exception ignored) {}
         
         req.getSession().setAttribute("lastFilieres", filieres);
         req.getSession().setAttribute("affectationDone", true);
@@ -1275,6 +1314,14 @@ public class FrontController extends HttpServlet {
         req.setAttribute("totalProjects", service.getTotalProjetsAffectes(null));
         req.setAttribute("totalProfs", service.getTotalProfesseurs());
 
+        // Operational extensions: list of all professors (for jury-swap modal),
+        // open exceptions, and the active session/version.
+        try {
+            req.setAttribute("allProfs", new dao.ProfesseurDAOImpl().findAll());
+            req.setAttribute("openExceptions",
+                    services.ExceptionManagementService.getInstance().findOpen());
+        } catch (Exception ignored) {}
+
         // Pull any flash messages set by salle CRUD or planning failure
         passFlashFromSession(req,
                 "salleFlash", "salleFlashIsError",
@@ -1354,6 +1401,15 @@ public class FrontController extends HttpServlet {
 
         // Persist the constraints used so the planning page can re-display them
         req.getSession().setAttribute("lastPlanningConfig", config);
+
+        // Audit
+        try {
+            entities.AppUser actor = AuthFilter.currentUser(req);
+            services.AuditService.getInstance().record(actor,
+                    entities.AuditAction.SOUTENANCE_GENERATED, "Soutenance", null,
+                    "Génération du planning : " + (planningResult.isSuccess() ? "succès" : "échec")
+                            + " (" + planningResult.getTotalSoutenances() + " soutenance(s))");
+        } catch (Exception ignored) {}
 
         if (!planningResult.isSuccess()) {
             // Redirect to the config page so the user can fix settings immediately

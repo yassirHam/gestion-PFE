@@ -1,5 +1,7 @@
 package services;
 
+import entities.ProfesseurGrade;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -62,6 +64,38 @@ public class ConstraintSet {
         set.put(new Constraint(ConstraintIds.CUSTOM_EXCLUDED_DATES,
                 "Dates exclues (YYYY-MM-DD separees par des virgules)",
                 "", ConstraintPriority.HARD));
+
+        // ─── New operational constraints (defaults are tuned for "advisory")
+        set.put(new Constraint(ConstraintIds.MIN_PRESIDENT_GRADE,
+                "Grade minimal du président (PES/PH/PA/MC/MA/VAC, vide = aucun)",
+                "", ConstraintPriority.SOFT));
+        set.put(new Constraint(ConstraintIds.REQUIRE_EXTERNAL_MEMBER,
+                "Au moins un membre externe / industriel par jury",
+                "false", ConstraintPriority.SOFT));
+        set.put(new Constraint(ConstraintIds.MAX_SOUTENANCES_PER_HALFDAY,
+                "Max soutenances par professeur et par demi-journée",
+                "3", ConstraintPriority.SOFT));
+        set.put(new Constraint(ConstraintIds.AVOID_CONSECUTIVE_DEFENSES,
+                "Éviter deux soutenances consécutives pour le même prof",
+                "true", ConstraintPriority.SOFT));
+        set.put(new Constraint(ConstraintIds.MAX_JURY_REPETITION,
+                "Nombre max de fois où la même triade de jury peut être réutilisée",
+                "5", ConstraintPriority.SOFT));
+        set.put(new Constraint(ConstraintIds.RESPECT_PROF_UNAVAILABILITY,
+                "Respecter les indisponibilités déclarées par les professeurs",
+                "true", ConstraintPriority.HARD));
+        set.put(new Constraint(ConstraintIds.RESPECT_LANGUAGE_REQUIREMENT,
+                "Respecter la langue du sujet (au moins un membre la parle)",
+                "true", ConstraintPriority.SOFT));
+        set.put(new Constraint(ConstraintIds.SPECIALTY_COMPATIBILITY,
+                "Préférer un jury compatible avec la spécialité du sujet",
+                "true", ConstraintPriority.SOFT));
+        set.put(new Constraint(ConstraintIds.RESPECT_SESSION_DEADLINE,
+                "Refuser un planning au-delà de la date butoir de la session",
+                "true", ConstraintPriority.SOFT));
+        set.put(new Constraint(ConstraintIds.FORBID_CONSECUTIVE_SLOTS,
+                "Interdire deux soutenances dans deux créneaux strictement consécutifs (même prof)",
+                "false", ConstraintPriority.SOFT));
         return set;
     }
 
@@ -198,6 +232,108 @@ public class ConstraintSet {
         Constraint c = get(ConstraintIds.EXCLUDE_WEEKENDS);
         return c == null || c.isHard();
     }
+
+    // ─── New typed accessors ───────────────────────────────────────────────
+
+    /**
+     * @return the minimum {@link ProfesseurGrade} required to chair a jury,
+     *         or {@code null} when the rule is not enabled.
+     */
+    public ProfesseurGrade getMinPresidentGrade() {
+        Constraint c = get(ConstraintIds.MIN_PRESIDENT_GRADE);
+        if (c == null) return null;
+        String v = c.asString("");
+        if (v == null || v.isEmpty()) return null;
+        try { return ProfesseurGrade.valueOf(v.trim().toUpperCase()); }
+        catch (Exception e) { return null; }
+    }
+
+    public boolean isMinPresidentGradeHard() {
+        Constraint c = get(ConstraintIds.MIN_PRESIDENT_GRADE);
+        return c != null && c.isHard();
+    }
+
+    public boolean isRequireExternalMember() {
+        Constraint c = get(ConstraintIds.REQUIRE_EXTERNAL_MEMBER);
+        return c != null && c.asBool(false);
+    }
+
+    public boolean isRequireExternalMemberHard() {
+        Constraint c = get(ConstraintIds.REQUIRE_EXTERNAL_MEMBER);
+        return c != null && c.isHard();
+    }
+
+    public int getMaxSoutenancesPerHalfday() {
+        Constraint c = get(ConstraintIds.MAX_SOUTENANCES_PER_HALFDAY);
+        return c == null ? 3 : Math.max(1, c.asInt(3));
+    }
+
+    public boolean isMaxSoutenancesPerHalfdayHard() {
+        Constraint c = get(ConstraintIds.MAX_SOUTENANCES_PER_HALFDAY);
+        return c != null && c.isHard();
+    }
+
+    public boolean isAvoidConsecutiveDefenses() {
+        Constraint c = get(ConstraintIds.AVOID_CONSECUTIVE_DEFENSES);
+        return c == null || c.asBool(true);
+    }
+
+    public int getMaxJuryRepetition() {
+        Constraint c = get(ConstraintIds.MAX_JURY_REPETITION);
+        return c == null ? 5 : Math.max(1, c.asInt(5));
+    }
+
+    public boolean isMaxJuryRepetitionHard() {
+        Constraint c = get(ConstraintIds.MAX_JURY_REPETITION);
+        return c != null && c.isHard();
+    }
+
+    public boolean isRespectProfUnavailability() {
+        Constraint c = get(ConstraintIds.RESPECT_PROF_UNAVAILABILITY);
+        return c == null || c.asBool(true);
+    }
+
+    public boolean isRespectProfUnavailabilityHard() {
+        Constraint c = get(ConstraintIds.RESPECT_PROF_UNAVAILABILITY);
+        return c == null || c.isHard();
+    }
+
+    public boolean isRespectLanguageRequirement() {
+        Constraint c = get(ConstraintIds.RESPECT_LANGUAGE_REQUIREMENT);
+        return c == null || c.asBool(true);
+    }
+
+    public boolean isRespectLanguageRequirementHard() {
+        Constraint c = get(ConstraintIds.RESPECT_LANGUAGE_REQUIREMENT);
+        return c != null && c.isHard();
+    }
+
+    public boolean isSpecialtyCompatibilityPreferred() {
+        Constraint c = get(ConstraintIds.SPECIALTY_COMPATIBILITY);
+        return c == null || c.asBool(true);
+    }
+
+    public boolean isRespectSessionDeadline() {
+        Constraint c = get(ConstraintIds.RESPECT_SESSION_DEADLINE);
+        return c == null || c.asBool(true);
+    }
+
+    public boolean isRespectSessionDeadlineHard() {
+        Constraint c = get(ConstraintIds.RESPECT_SESSION_DEADLINE);
+        return c != null && c.isHard();
+    }
+
+    public boolean isForbidConsecutiveSlots() {
+        Constraint c = get(ConstraintIds.FORBID_CONSECUTIVE_SLOTS);
+        return c != null && c.asBool(false);
+    }
+
+    public boolean isForbidConsecutiveSlotsHard() {
+        Constraint c = get(ConstraintIds.FORBID_CONSECUTIVE_SLOTS);
+        return c != null && c.isHard();
+    }
+
+    // ─── Generic helpers ───────────────────────────────────────────────────
 
     public ConstraintPriority priorityOf(String id) {
         Constraint c = get(id);

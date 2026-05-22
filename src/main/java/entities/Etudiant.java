@@ -23,6 +23,17 @@ public class Etudiant {
     @Temporal(TemporalType.DATE)
     private Date date_debut_stage;
 
+    @ManyToOne
+    @JoinColumn(name = "department_id")
+    private Department department;
+
+    /** Optional priority hint: 0 = normal, > 0 = treated first (deadline-aware planning). */
+    @Column(name = "priority")
+    private int priority;
+
+    @Column(length = 64, name = "phone")
+    private String phone;
+
     public Etudiant() {}
     
     
@@ -123,6 +134,15 @@ public class Etudiant {
 	public void setLanguage(String language) {
 		this.language = language;
 	}
+
+	public Department getDepartment() { return department; }
+	public void setDepartment(Department department) { this.department = department; }
+
+	public int getPriority() { return priority; }
+	public void setPriority(int priority) { this.priority = priority; }
+
+	public String getPhone() { return phone; }
+	public void setPhone(String phone) { this.phone = phone; }
     
 
 }

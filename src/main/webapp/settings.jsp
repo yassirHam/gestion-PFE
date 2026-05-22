@@ -274,6 +274,60 @@
         </form>
     </div>
 
+    <!-- ─── SMTP / notifications ────────────────────────────────────── -->
+    <div class="card p-4">
+        <div class="section-title"><i class="fa-solid fa-paper-plane me-1"></i> Notifications par e-mail (SMTP)</div>
+        <p class="text-muted small mb-3">
+            Configuration optionnelle. Quand SMTP est désactivé, les convocations
+            sont produites et stockées en file pour consultation ; activez-le pour
+            que l'application les expédie automatiquement.
+        </p>
+        <form action="saveSmtp.do" method="post">
+            <div class="form-check form-switch mb-3">
+                <input class="form-check-input" type="checkbox" id="smtpEnabled" name="smtpEnabled" value="true"
+                       ${appSettings.smtpEnabled ? 'checked' : ''}>
+                <label class="form-check-label fw-semibold" for="smtpEnabled">Activer l'envoi SMTP</label>
+            </div>
+            <div class="row g-3">
+                <div class="col-12 col-md-6">
+                    <label class="form-label small fw-semibold">Hôte SMTP</label>
+                    <input type="text" name="smtpHost" class="form-control"
+                           value="${fn:escapeXml(appSettings.smtpHost)}" placeholder="smtp.gmail.com">
+                </div>
+                <div class="col-6 col-md-3">
+                    <label class="form-label small fw-semibold">Port</label>
+                    <input type="number" name="smtpPort" class="form-control"
+                           value="${appSettings.smtpPort}" placeholder="587">
+                </div>
+                <div class="col-6 col-md-3 d-flex align-items-end">
+                    <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" id="smtpStartTls" name="smtpStartTls" value="true"
+                               ${appSettings.smtpStartTls ? 'checked' : ''}>
+                        <label class="form-check-label small" for="smtpStartTls">STARTTLS</label>
+                    </div>
+                </div>
+                <div class="col-12 col-md-6">
+                    <label class="form-label small fw-semibold">Utilisateur</label>
+                    <input type="text" name="smtpUsername" class="form-control"
+                           value="${fn:escapeXml(appSettings.smtpUsername)}">
+                </div>
+                <div class="col-12 col-md-6">
+                    <label class="form-label small fw-semibold">Mot de passe</label>
+                    <input type="password" name="smtpPassword" class="form-control" autocomplete="new-password"
+                           placeholder="${empty appSettings.smtpPassword ? '(vide)' : '(inchangé si laissé vide)'}">
+                </div>
+                <div class="col-12">
+                    <label class="form-label small fw-semibold">Adresse expéditeur</label>
+                    <input type="email" name="smtpFrom" class="form-control"
+                           value="${fn:escapeXml(appSettings.smtpFrom)}" placeholder="no-reply@etablissement.fr">
+                </div>
+            </div>
+            <div class="text-end mt-3">
+                <button class="btn btn-primary"><i class="fa-solid fa-floppy-disk me-1"></i>Enregistrer SMTP</button>
+            </div>
+        </form>
+    </div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>

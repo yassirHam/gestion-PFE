@@ -88,6 +88,41 @@ public class AppSettings {
     @Column(length = 255)
     private String nlpModel;
 
+    // ─── SMTP / notifications ───────────────────────────────────────────────
+    @Column(name = "smtp_enabled")
+    private boolean smtpEnabled = false;
+
+    @Column(length = 255, name = "smtp_host")
+    private String smtpHost;
+
+    @Column(name = "smtp_port")
+    private Integer smtpPort;
+
+    @Column(length = 255, name = "smtp_username")
+    private String smtpUsername;
+
+    @Column(length = 1024, name = "smtp_password")
+    private String smtpPassword;
+
+    @Column(length = 255, name = "smtp_from")
+    private String smtpFrom;
+
+    @Column(name = "smtp_starttls")
+    private boolean smtpStartTls = true;
+
+    // ─── Multi-tenant / governance ──────────────────────────────────────────
+    @Column(name = "active_session_id")
+    private Long activeSessionId;
+
+    @Column(length = 64, name = "default_campus")
+    private String defaultCampus;
+
+    @Column(name = "freeze_on_publish")
+    private boolean freezeOnPublish = true;
+
+    @Column(name = "require_approval_chain")
+    private boolean requireApprovalChain = true;
+
     public AppSettings() {}
 
     // ─── Getters / Setters ──────────────────────────────────────────────────
@@ -153,4 +188,30 @@ public class AppSettings {
     public void setNlpModel(String v) { this.nlpModel = v; }
 
     public boolean hasLogo() { return logoBytes != null && logoBytes.length > 0; }
+
+    // ─── SMTP getters/setters ──────────────────────────────────────────────
+    public boolean isSmtpEnabled() { return smtpEnabled; }
+    public void setSmtpEnabled(boolean v) { this.smtpEnabled = v; }
+    public String getSmtpHost() { return smtpHost; }
+    public void setSmtpHost(String v) { this.smtpHost = v; }
+    public Integer getSmtpPort() { return smtpPort; }
+    public void setSmtpPort(Integer v) { this.smtpPort = v; }
+    public String getSmtpUsername() { return smtpUsername; }
+    public void setSmtpUsername(String v) { this.smtpUsername = v; }
+    public String getSmtpPassword() { return smtpPassword; }
+    public void setSmtpPassword(String v) { this.smtpPassword = v; }
+    public String getSmtpFrom() { return smtpFrom; }
+    public void setSmtpFrom(String v) { this.smtpFrom = v; }
+    public boolean isSmtpStartTls() { return smtpStartTls; }
+    public void setSmtpStartTls(boolean v) { this.smtpStartTls = v; }
+
+    // ─── Tenant / governance ───────────────────────────────────────────────
+    public Long getActiveSessionId() { return activeSessionId; }
+    public void setActiveSessionId(Long v) { this.activeSessionId = v; }
+    public String getDefaultCampus() { return defaultCampus; }
+    public void setDefaultCampus(String v) { this.defaultCampus = v; }
+    public boolean isFreezeOnPublish() { return freezeOnPublish; }
+    public void setFreezeOnPublish(boolean v) { this.freezeOnPublish = v; }
+    public boolean isRequireApprovalChain() { return requireApprovalChain; }
+    public void setRequireApprovalChain(boolean v) { this.requireApprovalChain = v; }
 }

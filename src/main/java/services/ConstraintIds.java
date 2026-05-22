@@ -8,6 +8,8 @@ public final class ConstraintIds {
 
     private ConstraintIds() {}
 
+    // ─── Original constraints ──────────────────────────────────────────────
+
     /** Minimum gap (in slots / hours) between two soutenances of the same professor. */
     public static final String PROF_REST_HOURS = "PROF_REST_HOURS";
 
@@ -43,4 +45,67 @@ public final class ConstraintIds {
 
     /** User-supplied list of excluded dates (YYYY-MM-DD, comma separated). */
     public static final String CUSTOM_EXCLUDED_DATES = "CUSTOM_EXCLUDED_DATES";
+
+    // ─── New operational constraints ───────────────────────────────────────
+
+    /**
+     * Minimum grade required for a jury president (e.g. PES, PH).
+     * Stored as the upper-case enum name; empty string disables the rule.
+     */
+    public static final String MIN_PRESIDENT_GRADE = "MIN_PRESIDENT_GRADE";
+
+    /**
+     * If set to {@code true}, every jury must include at least one external
+     * (non-internal) member. Useful for capstone defenses requiring industry
+     * representation.
+     */
+    public static final String REQUIRE_EXTERNAL_MEMBER = "REQUIRE_EXTERNAL_MEMBER";
+
+    /**
+     * Maximum number of soutenances a professor can be involved in during a
+     * single half-day. Tighter than MAX_SOUTENANCES_PER_PROF_PER_DAY.
+     */
+    public static final String MAX_SOUTENANCES_PER_HALFDAY = "MAX_SOUTENANCES_PER_HALFDAY";
+
+    /**
+     * Forbid the same jury (same 3 professors) from sitting back-to-back on
+     * the same half-day if not strictly necessary. Reported as SOFT.
+     */
+    public static final String AVOID_CONSECUTIVE_DEFENSES = "AVOID_CONSECUTIVE_DEFENSES";
+
+    /**
+     * Maximum number of times the exact same jury (P + R1 + R2) can be
+     * reused across the planning.
+     */
+    public static final String MAX_JURY_REPETITION = "MAX_JURY_REPETITION";
+
+    /**
+     * If set to {@code true}, planning honors per-professor unavailability
+     * declarations (ProfesseurAvailability records) as HARD constraints.
+     */
+    public static final String RESPECT_PROF_UNAVAILABILITY = "RESPECT_PROF_UNAVAILABILITY";
+
+    /**
+     * If set to {@code true}, the project subject's language (from NLP) must
+     * match at least one jury member's declared {@code languages}.
+     */
+    public static final String RESPECT_LANGUAGE_REQUIREMENT = "RESPECT_LANGUAGE_REQUIREMENT";
+
+    /**
+     * Prefer the encadrant's specialty / discipline when picking rapporteurs
+     * (specialty compatibility). Reported as SOFT.
+     */
+    public static final String SPECIALTY_COMPATIBILITY = "SPECIALTY_COMPATIBILITY";
+
+    /**
+     * Penalize / forbid scheduling beyond the session's deadline date.
+     * Stored as a boolean; HARD = block, SOFT = warn.
+     */
+    public static final String RESPECT_SESSION_DEADLINE = "RESPECT_SESSION_DEADLINE";
+
+    /**
+     * Disallow planning a professor on consecutive slots (same person,
+     * back-to-back even with the rest gap).
+     */
+    public static final String FORBID_CONSECUTIVE_SLOTS = "FORBID_CONSECUTIVE_SLOTS";
 }

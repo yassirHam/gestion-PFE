@@ -9,47 +9,89 @@ import org.hibernate.Transaction;
 import entities.Professeur;
 import util.HibernateUtil;
 
-public class ProfesseurDAOImpl implements ProfesseurDAO{
-	
-	private SessionFactory sessionFactory = HibernateUtil.getSessionFactory();
+public class ProfesseurDAOImpl implements ProfesseurDAO {
 
-	@Override
-	public List<Professeur> findAll() {
-		// TODO Auto-generated method stub
-		Session session = sessionFactory.openSession();
-        List<Professeur> list = session
-                .createQuery("from Professeur", Professeur.class)
-                .list();
-        session.close();
-        return list;
-	}
+    private final SessionFactory sessionFactory = HibernateUtil.getSessionFactory();
 
-	@Override
-	public void saveAll(List<Professeur> list) {
-		// TODO Auto-generated method stub
-		Session session = sessionFactory.openSession();
-        Transaction tx = session.beginTransaction();
-
-        for (Professeur p : list) {
-            session.merge(p);
+    @Override
+    public List<Professeur> findAll() {
+        try (Session session = sessionFactory.openSession()) {
+            return session
+                    .createQuery("from Professeur order by nom, prenom", Professeur.class)
+                    .list();
         }
+    }
 
-        tx.commit();
-        session.close();
-		
-	}
+    @Override
+    public Professeur findById(Long id) {
+        if (id == null) return null;
+        try (Session session = sessionFactory.openSession()) {
+            return session.get(Professeur.class, id);
+        }
+    }
 
-	@Override
-	public void deleteAll() {
-		// TODO Auto-generated method stub
-		Session session = sessionFactory.openSession();
-        Transaction tx = session.beginTransaction();
+    @Override
+    public Professeur save(Professeur prof) {
+        if (prof == null) return null;
+        Transaction tx = null;
+        try (Session session = sessionFactory.openSession()) {
+            tx = session.beginTransaction();
+            Professeur merged = (Professeur) session.merge(prof);
+            tx.commit();
+            return merged;
+        } catch (Exception e) {
+            if (tx != null) tx.rollback();
+            e.printStackTrace();
+            return prof;
+        }
+    }
 
-        session.createMutationQuery("delete from Professeur").executeUpdate();
+    @Override
+    public void saveAll(List<Professeur> list) {
+        try (Session session = sessionFactory.openSession()) {
+            Transaction tx = session.beginTransaction();
+            try {
+                for (Professeur p : list) {
+                    session.merge(p);
+                }
+                tx.commit();
+            } catch (Exception e) {
+                tx.rollback();
+                e.printStackTrace();
+            }
+        }
+    }
 
-        tx.commit();
-        session.close();
-		
-	}
+    @Override
+    public void deleteAll() {
+        try (Session session = sessionFactory.openSession()) {
+            Transaction tx = session.beginTransaction();
+            try {
+                session.createMutationQuery("delete from Professeur").executeUpdate();
+                tx.commit();
+            } catch (Exception e) {
+                tx.rollback();
+                e.printStackTrace();
+            }
+        }
+    }
 
+    @Override
+    public void setExcluded(Long profId, boolean excluded, String reason, Long actorId) {
+        if (profId == null) return;
+        Transaction tx = null;
+        try (Session session = sessionFactory.openSession()) {
+            tx = session.beginTransaction();
+            Professeur p = session.get(Professeur.class, profId);
+            if (p != null) {
+                p.setExcluded(excluded);
+                p.setExclusionReason(excluded ? reason : null);
+                session.merge(p);
+            }
+            tx.commit();
+        } catch (Exception e) {
+            if (tx != null) tx.rollback();
+            e.printStackTrace();
+        }
+    }
 }

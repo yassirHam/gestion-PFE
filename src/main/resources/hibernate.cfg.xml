@@ -33,6 +33,15 @@
         <mapping class="entities.Salle"/>
         <mapping class="entities.Jury"/>
         <mapping class="entities.AppSettings"/>
+        <mapping class="entities.Department"/>
+        <mapping class="entities.AcademicSession"/>
+        <mapping class="entities.PlanningVersion"/>
+        <mapping class="entities.AppUser"/>
+        <mapping class="entities.AuditLog"/>
+        <mapping class="entities.Approval"/>
+        <mapping class="entities.Notification"/>
+        <mapping class="entities.SoutenanceException"/>
+        <mapping class="entities.ProfesseurAvailability"/>
 
 
     </session-factory>

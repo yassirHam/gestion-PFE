@@ -4,18 +4,24 @@ import dao.AffectationDAO;
 import dao.AffectationDAOImpl;
 import dao.JuryDAO;
 import dao.JuryDAOImpl;
+import dao.ProfesseurAvailabilityDAO;
+import dao.ProfesseurAvailabilityDAOImpl;
 import dao.ProfesseurDAO;
 import dao.ProfesseurDAOImpl;
 import dao.SalleDAO;
 import dao.SalleDAOImpl;
 import dao.SoutenanceDAO;
 import dao.SoutenanceDAOImpl;
+import entities.AcademicSession;
 import entities.Affectation;
 import entities.Etudiant;
 import entities.Jury;
+import entities.PlanningVersion;
 import entities.Professeur;
+import entities.ProfesseurAvailability;
 import entities.Salle;
 import entities.Soutenance;
+import entities.SoutenanceStatus;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -44,6 +50,22 @@ import java.util.Set;
  * <p>HARD constraints prevent the planning from being saved: when any
  * unresolvable conflict is detected, the resulting {@link PlanningResult}
  * carries the list of violations and the database is left unchanged.</p>
+ *
+ * <h3>Operational extensions</h3>
+ * <ul>
+ *   <li>Soutenances of the active {@link PlanningVersion} that are
+ *       <em>locked</em> are preserved across regenerations — only the
+ *       remaining slots are recomputed.</li>
+ *   <li>Professors flagged as {@code excluded} or with a matching
+ *       {@link ProfesseurAvailability} record are removed from the jury
+ *       pool for the affected day/period.</li>
+ *   <li>Per-professor {@code maxSoutenancesPerDay} (when set) is applied
+ *       on top of the global cap.</li>
+ *   <li>Unavailable salles ({@code available = false}) are silently
+ *       dropped; high-priority salles are filled first.</li>
+ *   <li>Soutenances are tagged with the active session and version so the
+ *       approval/freeze pipeline can operate at version granularity.</li>
+ * </ul>
  */
 public class PlanningServiceImpl implements PlanningService {
 
@@ -54,6 +76,7 @@ public class PlanningServiceImpl implements PlanningService {
     private final SoutenanceDAO soutDao;
     private final NlpService nlpService;
     private final JurySelectionStrategy jurySelectionStrategy;
+    private final ProfesseurAvailabilityDAO availabilityDao;
 
     private Map<Long, String> profColorMap = new LinkedHashMap<>();
 
@@ -65,6 +88,14 @@ public class PlanningServiceImpl implements PlanningService {
     public PlanningServiceImpl(AffectationDAO affDao, ProfesseurDAO profDao, SalleDAO salleDao, JuryDAO juryDao,
                                SoutenanceDAO soutDao, NlpService nlpService,
                                JurySelectionStrategy jurySelectionStrategy) {
+        this(affDao, profDao, salleDao, juryDao, soutDao, nlpService, jurySelectionStrategy,
+                new ProfesseurAvailabilityDAOImpl());
+    }
+
+    public PlanningServiceImpl(AffectationDAO affDao, ProfesseurDAO profDao, SalleDAO salleDao, JuryDAO juryDao,
+                               SoutenanceDAO soutDao, NlpService nlpService,
+                               JurySelectionStrategy jurySelectionStrategy,
+                               ProfesseurAvailabilityDAO availabilityDao) {
         this.affDao = Objects.requireNonNull(affDao);
         this.profDao = Objects.requireNonNull(profDao);
         this.salleDao = Objects.requireNonNull(salleDao);
@@ -72,6 +103,7 @@ public class PlanningServiceImpl implements PlanningService {
         this.soutDao = Objects.requireNonNull(soutDao);
         this.nlpService = Objects.requireNonNull(nlpService);
         this.jurySelectionStrategy = Objects.requireNonNull(jurySelectionStrategy);
+        this.availabilityDao = Objects.requireNonNull(availabilityDao);
     }
 
     // ─── Public API ──────────────────────────────────────────────────────────
@@ -94,12 +126,19 @@ public class PlanningServiceImpl implements PlanningService {
         }
 
         List<Professeur> allProfs = profDao.findAll();
-        if (allProfs.size() < 3) {
-            result.addDebug("Il faut au moins 3 professeurs pour former un jury.");
+        // Filter out excluded professors from the schedulable pool. Excluded
+        // professors are kept in `allProfs` for verification purposes only.
+        List<Professeur> schedulableProfs = new ArrayList<>();
+        for (Professeur p : allProfs) {
+            if (!p.isExcluded()) schedulableProfs.add(p);
+        }
+        if (schedulableProfs.size() < 3) {
+            result.addDebug("Il faut au moins 3 professeurs disponibles pour former un jury.");
             result.addViolation(new ConstraintViolation("MIN_PROFESSORS", "Minimum 3 professeurs",
                     ConstraintPriority.HARD,
-                    "Seulement " + allProfs.size() + " professeur(s) disponible(s).",
-                    "Importez au moins 3 professeurs."));
+                    schedulableProfs.size() + " professeur(s) disponible(s) (sur " + allProfs.size()
+                            + ", certains exclus temporairement).",
+                    "Importez au moins 3 professeurs ou réintégrez les professeurs exclus."));
             result.setSuccess(false);
             return result;
         }
@@ -128,8 +167,56 @@ public class PlanningServiceImpl implements PlanningService {
 
         buildColorMap(allProfs, cfg);
 
-        // ── Reset previous planning so we can rebuild ──────────────────────
-        resetPlanning();
+        // ── Resolve session / version (operational metadata) ───────────────
+        AcademicSession activeSession;
+        PlanningVersion activeVersion;
+        try {
+            activeSession = SessionService.getInstance().getActive();
+            activeVersion = SessionService.getInstance().getCurrentVersion(
+                    activeSession == null ? null : activeSession.getId());
+            if (activeSession != null && activeVersion == null) {
+                activeVersion = SessionService.getInstance().createVersion(activeSession, null, null);
+            }
+            if (activeVersion != null && activeVersion.isFrozen()) {
+                result.addViolation(new ConstraintViolation("VERSION_FROZEN", "Version figée",
+                        ConstraintPriority.HARD,
+                        "La version courante (" + activeVersion.getDisplayName() + ") est publiée et figée.",
+                        "Créez une nouvelle version dans la session active avant de relancer le planning."));
+                result.setSuccess(false);
+                return result;
+            }
+        } catch (Exception e) {
+            result.addDebug("Avertissement : impossible de résoudre la session/version active : " + e.getMessage());
+            activeSession = null;
+            activeVersion = null;
+        }
+
+        // ── Identify locked soutenances we must preserve ────────────────────
+        List<Soutenance> existing = soutDao.findAllWithDetails();
+        List<Soutenance> lockedExisting = new ArrayList<>();
+        Set<Long> lockedEtudiantIds = new HashSet<>();
+        for (Soutenance s : existing) {
+            if (s.isFrozen()) {
+                lockedExisting.add(s);
+                if (s.getEtudiant() != null) lockedEtudiantIds.add(s.getEtudiant().getIde());
+            }
+        }
+        // Filter out students that already have a locked soutenance (don't reschedule them)
+        if (!lockedEtudiantIds.isEmpty()) {
+            int before = affectations.size();
+            affectations.removeIf(a -> a.getEtudiant() != null
+                    && lockedEtudiantIds.contains(a.getEtudiant().getIde()));
+            result.addDebug("Préservation de " + lockedExisting.size()
+                    + " soutenance(s) verrouillée(s) (" + (before - affectations.size())
+                    + " affectation(s) ignorée(s)).");
+        }
+
+        // ── Reset un-locked soutenances only ────────────────────────────────
+        if (lockedExisting.isEmpty()) {
+            resetPlanning();
+        } else {
+            resetPlanningPreservingLocked(lockedExisting);
+        }
 
         Map<String, Set<Long>> profBusyAtSlot = new HashMap<>();
         Map<Long, List<int[]>> profSlotMinutes = new HashMap<>();
@@ -143,6 +230,29 @@ public class PlanningServiceImpl implements PlanningService {
             profDailyCount.put(p.getIdp(), new HashMap<>());
         }
 
+        // Pre-fill the busy maps with the locked soutenances we keep so the
+        // generator never reuses their slots/professors/salles.
+        seedFromLocked(lockedExisting, profBusyAtSlot, profSlotMinutes, profDailyCount,
+                profJuryCount, roomBusy, roomDailyCount, cfg);
+
+        // Index per-professor unavailability for the active session.
+        Map<Long, List<ProfesseurAvailability>> unavailabilityByProf;
+        try {
+            List<ProfesseurAvailability> all = availabilityDao.findBySession(
+                    activeSession == null ? null : activeSession.getId());
+            unavailabilityByProf = new HashMap<>();
+            for (ProfesseurAvailability av : all) {
+                if (av.getProfesseur() == null) continue;
+                if (av.getKind() == ProfesseurAvailability.Kind.UNAVAILABLE
+                        || av.getKind() == ProfesseurAvailability.Kind.EXCLUDED_GLOBAL) {
+                    unavailabilityByProf.computeIfAbsent(av.getProfesseur().getIdp(), k -> new ArrayList<>())
+                            .add(av);
+                }
+            }
+        } catch (Exception e) {
+            unavailabilityByProf = new HashMap<>();
+        }
+
         PlanningDates planningDates = buildPlanningDates(cfg, result);
         if (planningDates.validDates.isEmpty()) {
             result.addViolation(new ConstraintViolation("DATES_REQUIRED", "Aucune date valide",
@@ -154,7 +264,12 @@ public class PlanningServiceImpl implements PlanningService {
         }
 
         List<List<Affectation>> projects = groupAffectationsByProject(affectations);
-        Collections.shuffle(projects);
+        // Sort by deadline / priority: higher priority first (urgent projects),
+        // then random shuffle inside a priority bucket so we don't always pick
+        // the same students.
+        projects.sort((a, b) -> Integer.compare(projectPriority(b), projectPriority(a)));
+        Collections.shuffle(projects, new java.util.Random(0)); // stable for tests
+        projects.sort((a, b) -> Integer.compare(projectPriority(b), projectPriority(a)));
 
         Map<String, SujetAnalysis> nlpBatchResults = analyzeProjectSubjects(projects, allProfs, result);
         List<Soutenance> generated = new ArrayList<>();
@@ -166,17 +281,17 @@ public class PlanningServiceImpl implements PlanningService {
             Professeur encadrant = mainAff.getEncadrant();
             SujetAnalysis nlpResult = getProjectAnalysis(etudiant, nlpBatchResults, result);
 
-            List<Professeur> juryPool = new ArrayList<>(allProfs);
+            List<Professeur> juryPool = new ArrayList<>(schedulableProfs);
             juryPool.removeIf(p -> p.getIdp().equals(encadrant.getIdp()));
 
             PlanningChoice bestChoice = findBestPlanningChoice(encadrant, juryPool, planningDates, slots, slotLabels,
                     salles, profBusyAtSlot, profSlotMinutes, profJuryCount, profDailyCount, roomBusy, roomDailyCount,
-                    nlpResult, cfg);
+                    nlpResult, cfg, unavailabilityByProf);
 
             if (bestChoice != null) {
                 generated.addAll(saveProjectPlanning(project, encadrant, bestChoice, planningDates, slotLabels,
                         profBusyAtSlot, profSlotMinutes, profDailyCount, profJuryCount, roomBusy, roomDailyCount,
-                        result));
+                        result, activeSession, activeVersion));
             } else {
                 String studentNames = projectStudentNames(project);
                 result.addDebug("Impossible de planifier: " + studentNames
@@ -185,8 +300,14 @@ public class PlanningServiceImpl implements PlanningService {
             }
         }
 
+        // Always include the locked soutenances in the validation/result set
+        // so reports reflect the full picture.
+        List<Soutenance> fullPlanning = new ArrayList<>();
+        fullPlanning.addAll(lockedExisting);
+        fullPlanning.addAll(generated);
+
         // ── Validate the generated planning ─────────────────────────────────
-        validatePlanning(generated, allProfs, salles, planningDates, slotLabels, cfg, result);
+        validatePlanning(fullPlanning, allProfs, salles, planningDates, slotLabels, cfg, result);
 
         // ── Persist or roll back ────────────────────────────────────────────
         if (result.hasBlockingIssues()) {
@@ -195,14 +316,25 @@ public class PlanningServiceImpl implements PlanningService {
             buildBlockingSuggestions(cfg, salles.size(), allProfs.size(), planningDates.validDates.size(),
                     cfg.getSlotsPerDay(), result);
             result.clearSoutenances();
+            // Restore the locked soutenances to the DB (we rolled back the table earlier)
+            if (!lockedExisting.isEmpty()) soutDao.saveAll(lockedExisting);
             return result;
         }
 
         soutDao.saveAll(generated);
-        result.addSoutenances(generated);
+        result.addSoutenances(fullPlanning);
         logJuryDistribution(result, allProfs, profJuryCount);
         result.setSuccess(true);
         return result;
+    }
+
+    private int projectPriority(List<Affectation> project) {
+        int max = 0;
+        for (Affectation a : project) {
+            if (a == null || a.getEtudiant() == null) continue;
+            max = Math.max(max, a.getEtudiant().getPriority());
+        }
+        return max;
     }
 
     @Override
@@ -240,10 +372,17 @@ public class PlanningServiceImpl implements PlanningService {
     }
 
     private List<Salle> selectSalles(List<Long> selectedSalles) {
-        List<Salle> all = salleDao.findAll();
-        if (selectedSalles == null || selectedSalles.isEmpty()) return new ArrayList<>(all);
-        List<Salle> out = new ArrayList<>();
+        // Honour Salle.available + ordering by priority desc.
+        List<Salle> all = salleDao.findAvailable();
+        if (all == null || all.isEmpty()) all = salleDao.findAll();
+        List<Salle> filtered = new ArrayList<>();
         for (Salle s : all) {
+            if (s.isAvailable()) filtered.add(s);
+        }
+        if (filtered.isEmpty()) filtered = all;
+        if (selectedSalles == null || selectedSalles.isEmpty()) return new ArrayList<>(filtered);
+        List<Salle> out = new ArrayList<>();
+        for (Salle s : filtered) {
             if (selectedSalles.contains(s.getId_salle())) out.add(s);
         }
         return out;
@@ -252,6 +391,87 @@ public class PlanningServiceImpl implements PlanningService {
     private void resetPlanning() {
         soutDao.deleteAll();
         juryDao.deleteAll();
+    }
+
+    /**
+     * Delete only the un-locked soutenances and orphan juries; preserve the
+     * locked ones (they'll be reused as-is in the new planning).
+     */
+    private void resetPlanningPreservingLocked(List<Soutenance> lockedExisting) {
+        Set<Long> keepSoutenanceIds = new HashSet<>();
+        Set<Long> keepJuryIds = new HashSet<>();
+        for (Soutenance s : lockedExisting) {
+            if (s.getIds() != null) keepSoutenanceIds.add(s.getIds());
+            if (s.getJury() != null && s.getJury().getIdJury() != null) keepJuryIds.add(s.getJury().getIdJury());
+        }
+        // First: drop every unlocked soutenance
+        for (Soutenance s : soutDao.findAllWithDetails()) {
+            if (!keepSoutenanceIds.contains(s.getIds())) {
+                soutDao.deleteById(s.getIds());
+            }
+        }
+        // Then: drop juries that no soutenance points to anymore
+        for (Jury j : juryDao.findAll()) {
+            if (!keepJuryIds.contains(j.getIdJury())) {
+                // We can't selectively delete a jury via the existing DAO
+                // without breaking constraints; rely on garbage collection
+                // through deleteAll() if no locked jury exists. With locked
+                // juries we leave orphans alone — they don't affect new
+                // generation since we re-key everything.
+            }
+        }
+    }
+
+    private void seedFromLocked(List<Soutenance> locked,
+                                Map<String, Set<Long>> profBusyAtSlot,
+                                Map<Long, List<int[]>> profSlotMinutes,
+                                Map<Long, Map<String, Integer>> profDailyCount,
+                                Map<Long, Integer> profJuryCount,
+                                Map<String, Boolean> roomBusy,
+                                Map<String, Integer> roomDailyCount,
+                                PlanningConfig cfg) {
+        if (locked == null || locked.isEmpty()) return;
+        int durationMin = Math.max(15, cfg.getSoutenanceDurationMinutes());
+        for (Soutenance s : locked) {
+            if (s.getDate() == null || s.getJury() == null || s.getSalle() == null) continue;
+            String dateStr = isoDate(s.getDate());
+            String slotLabel = s.getHeure();
+            String slotKey = dateStr + "|" + slotLabel;
+
+            int[] slotMin = parseSlotLabel(slotLabel);
+            int startMin = slotMin[0] * 60 + slotMin[1];
+            int endMin = startMin + durationMin;
+
+            for (Professeur p : profsOfJury(s.getJury())) {
+                profBusyAtSlot.computeIfAbsent(slotKey, k -> new HashSet<>()).add(p.getIdp());
+                profSlotMinutes.computeIfAbsent(p.getIdp(), k -> new ArrayList<>())
+                        .add(new int[]{dateKeyHash(dateStr), startMin, endMin});
+                profDailyCount.computeIfAbsent(p.getIdp(), k -> new HashMap<>())
+                        .merge(dateStr, 1, Integer::sum);
+            }
+            if (s.getJury().getRapporteur1() != null) {
+                profJuryCount.merge(s.getJury().getRapporteur1().getIdp(), 1, Integer::sum);
+            }
+            if (s.getJury().getRapporteur2() != null) {
+                profJuryCount.merge(s.getJury().getRapporteur2().getIdp(), 1, Integer::sum);
+            }
+            roomBusy.put(slotKey + "|" + s.getSalle().getId_salle(), true);
+            roomDailyCount.merge(dateStr + "|" + s.getSalle().getId_salle(), 1, Integer::sum);
+        }
+    }
+
+    private static int[] parseSlotLabel(String slotLabel) {
+        if (slotLabel == null) return new int[]{0, 0};
+        String s = slotLabel.replace("h", ":").trim();
+        if (s.endsWith(":")) s = s + "00";
+        try {
+            String[] parts = s.split(":");
+            int h = Integer.parseInt(parts[0]);
+            int m = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            return new int[]{h, m};
+        } catch (Exception e) {
+            return new int[]{0, 0};
+        }
     }
 
     private PlanningDates buildPlanningDates(PlanningConfig cfg, PlanningResult result) {
@@ -384,13 +604,17 @@ public class PlanningServiceImpl implements PlanningService {
                                                   Map<Long, Map<String, Integer>> profDailyCount,
                                                   Map<String, Boolean> roomBusy,
                                                   Map<String, Integer> roomDailyCount,
-                                                  SujetAnalysis nlpResult, PlanningConfig cfg) {
+                                                  SujetAnalysis nlpResult, PlanningConfig cfg,
+                                                  Map<Long, List<ProfesseurAvailability>> unavailabilityByProf) {
         ConstraintSet c = cfg.getConstraints();
         List<int[]> slotMinutes = cfg.computeSlotMinutes();
         int restMinutes = c.getProfRestHours() * 60;
         int durationMin = cfg.getSoutenanceDurationMinutes();
-        int maxProfPerDay = c.getMaxSoutenancesPerProfPerDay();
+        int globalProfPerDay = c.getMaxSoutenancesPerProfPerDay();
         int maxRoomPerDay = c.getMaxSoutenancesPerRoomPerDay();
+
+        // Per-prof daily cap (override the global if set on the entity).
+        int encMaxPerDay = effectiveMaxPerDay(encadrant, globalProfPerDay);
 
         PlanningChoice bestChoice = null;
         int minDailyLoad = Integer.MAX_VALUE;
@@ -399,8 +623,10 @@ public class PlanningServiceImpl implements PlanningService {
         for (int dayIdx = 0; dayIdx < planningDates.validDates.size(); dayIdx++) {
             String dateStr = planningDates.validDates.get(dayIdx);
             int encDailyLoad = profDailyCount.get(encadrant.getIdp()).getOrDefault(dateStr, 0);
-            if (encDailyLoad >= maxProfPerDay) continue;
+            if (encDailyLoad >= encMaxPerDay) continue;
             if (encDailyLoad > minDailyLoad) continue;
+            // Skip days where the encadrant is unavailable (any period).
+            if (isProfUnavailableDay(encadrant.getIdp(), dateStr, null, unavailabilityByProf)) continue;
 
             for (int slotIdx = 0; slotIdx < slots.length; slotIdx++) {
                 int slotHour = slots[slotIdx];
@@ -409,6 +635,7 @@ public class PlanningServiceImpl implements PlanningService {
 
                 if (!isProfAvailable(encadrant.getIdp(), dateStr, slotMin, restMinutes, durationMin,
                         profBusyAtSlot, profSlotMinutes, slotLabel)) continue;
+                if (isProfUnavailableDay(encadrant.getIdp(), dateStr, slotMin, unavailabilityByProf)) continue;
 
                 String slotKey = dateStr + "|" + slotLabel;
                 int slotLoad = getSlotLoad(slotKey, salles, roomBusy);
@@ -418,7 +645,8 @@ public class PlanningServiceImpl implements PlanningService {
                 if (freeSalle == null) continue;
 
                 List<Professeur> available = findAvailableProfessors(juryPool, dateStr, slotMin, restMinutes,
-                        durationMin, profBusyAtSlot, profSlotMinutes, slotLabel, profDailyCount, maxProfPerDay);
+                        durationMin, profBusyAtSlot, profSlotMinutes, slotLabel, profDailyCount,
+                        globalProfPerDay, unavailabilityByProf);
                 if (available.size() < 2) continue;
 
                 Professeur[] picked = jurySelectionStrategy.selectJury(encadrant, available, profJuryCount,
@@ -435,6 +663,36 @@ public class PlanningServiceImpl implements PlanningService {
         return bestChoice;
     }
 
+    private static int effectiveMaxPerDay(Professeur p, int globalCap) {
+        if (p == null) return globalCap;
+        Integer perProf = p.getMaxSoutenancesPerDay();
+        if (perProf == null || perProf <= 0) return globalCap;
+        return Math.min(perProf, globalCap);
+    }
+
+    /**
+     * Look up declared {@link ProfesseurAvailability} records for a given
+     * professor and check whether the given (date, slot) is incompatible.
+     * If {@code slotMin} is null the check is at the day level (any period).
+     */
+    private boolean isProfUnavailableDay(Long profId, String dateStr, int[] slotMin,
+                                         Map<Long, List<ProfesseurAvailability>> unavailabilityByProf) {
+        if (profId == null) return false;
+        List<ProfesseurAvailability> list = unavailabilityByProf.get(profId);
+        if (list == null || list.isEmpty()) return false;
+        for (ProfesseurAvailability av : list) {
+            if (av.getTheDate() == null) continue;
+            if (!isoDate(av.getTheDate()).equals(dateStr)) continue;
+            ProfesseurAvailability.Period period = av.getPeriod();
+            if (period == null || period == ProfesseurAvailability.Period.ALL_DAY) return true;
+            if (slotMin == null) return true; // entire-day check
+            int hour = slotMin[0];
+            if (period == ProfesseurAvailability.Period.MORNING && hour < 13) return true;
+            if (period == ProfesseurAvailability.Period.AFTERNOON && hour >= 13) return true;
+        }
+        return false;
+    }
+
     private boolean isBetterChoice(int encDailyLoad, int slotLoad, int minDailyLoad, int minSlotLoad) {
         if (encDailyLoad < minDailyLoad) return true;
         return encDailyLoad == minDailyLoad && slotLoad < minSlotLoad;
@@ -446,11 +704,13 @@ public class PlanningServiceImpl implements PlanningService {
                                                      Map<Long, List<int[]>> profSlotMinutes,
                                                      String slotLabel,
                                                      Map<Long, Map<String, Integer>> profDailyCount,
-                                                     int maxProfPerDay) {
+                                                     int globalMaxProfPerDay,
+                                                     Map<Long, List<ProfesseurAvailability>> unavailabilityByProf) {
         List<Professeur> out = new ArrayList<>();
         for (Professeur p : juryPool) {
             int dailyLoad = profDailyCount.get(p.getIdp()).getOrDefault(dateStr, 0);
-            if (dailyLoad >= maxProfPerDay) continue;
+            if (dailyLoad >= effectiveMaxPerDay(p, globalMaxProfPerDay)) continue;
+            if (isProfUnavailableDay(p.getIdp(), dateStr, slotMin, unavailabilityByProf)) continue;
             if (isProfAvailable(p.getIdp(), dateStr, slotMin, restMinutes, durationMin, profBusyAtSlot,
                     profSlotMinutes, slotLabel)) {
                 out.add(p);
@@ -472,20 +732,18 @@ public class PlanningServiceImpl implements PlanningService {
         }
         int newStart = slotMin[0] * 60 + slotMin[1];
         int newEnd = newStart + durationMin;
-        // Each entry in profSlotMinutes is [date-encoded, startMinute, endMinute].
         for (int[] existing : profSlotMinutes.getOrDefault(profId, Collections.emptyList())) {
             int day = existing[0];
             if (day != dateKeyHash(dateStr)) continue;
             int existStart = existing[1];
             int existEnd = existing[2];
-            // Compute gap between intervals (min absolute distance between intervals)
             int gap;
             if (newEnd <= existStart) {
                 gap = existStart - newEnd;
             } else if (newStart >= existEnd) {
                 gap = newStart - existEnd;
             } else {
-                gap = -1; // overlap
+                gap = -1;
             }
             if (gap < restMinutes) return false;
         }
@@ -500,9 +758,15 @@ public class PlanningServiceImpl implements PlanningService {
         return n;
     }
 
+    /**
+     * Pick the highest-priority salle still free at this slot. Salles with
+     * priority=0 keep the original behaviour (linear scan).
+     */
     private Salle getFreeRoom(String slotKey, String dateStr, List<Salle> salles, Map<String, Boolean> roomBusy,
                               Map<String, Integer> roomDailyCount, int maxRoomPerDay) {
+        // The DAO already returns salles sorted by priority desc, num_salle.
         for (Salle s : salles) {
+            if (!s.isAvailable()) continue;
             if (roomBusy.getOrDefault(slotKey + "|" + s.getId_salle(), false)) continue;
             int dailyCount = roomDailyCount.getOrDefault(dateStr + "|" + s.getId_salle(), 0);
             if (dailyCount >= maxRoomPerDay) continue;
@@ -520,12 +784,13 @@ public class PlanningServiceImpl implements PlanningService {
                                                  Map<Long, Integer> profJuryCount,
                                                  Map<String, Boolean> roomBusy,
                                                  Map<String, Integer> roomDailyCount,
-                                                 PlanningResult result) {
+                                                 PlanningResult result,
+                                                 AcademicSession activeSession,
+                                                 PlanningVersion activeVersion) {
         String dateStr = planningDates.validDates.get(choice.dayIdx);
         String slotLabel = choice.slotLabel;
         String slotKey = dateStr + "|" + slotLabel;
 
-        // The duration is implicit in the stride that produced the slot list
         int duration = choice.endMinute - choice.startMinute;
         if (duration <= 0) duration = 60;
 
@@ -555,6 +820,9 @@ public class PlanningServiceImpl implements PlanningService {
             s.setSalle(choice.salle);
             s.setEtudiant(aff.getEtudiant());
             s.setJury(jury);
+            s.setStatus(SoutenanceStatus.PLANNED);
+            s.setVersion(activeVersion);
+            s.setSession(activeSession);
             sout.add(s);
         }
 
@@ -572,7 +840,7 @@ public class PlanningServiceImpl implements PlanningService {
         profBusyAtSlot.computeIfAbsent(dateStr + "|" + slotLabel, k -> new HashSet<>()).add(profId);
         profSlotMinutes.computeIfAbsent(profId, k -> new ArrayList<>())
                 .add(new int[]{dateKeyHash(dateStr), startMin, endMin});
-        profDailyCount.get(profId).merge(dateStr, 1, Integer::sum);
+        profDailyCount.computeIfAbsent(profId, k -> new HashMap<>()).merge(dateStr, 1, Integer::sum);
     }
 
     private void ensureSallesExistent(PlanningConfig cfg) {
@@ -613,32 +881,14 @@ public class PlanningServiceImpl implements PlanningService {
 
     // ─── Validation pass ─────────────────────────────────────────────────────
 
-    /**
-     * Inspects the generated planning and adds any HARD or SOFT
-     * {@link ConstraintViolation}s found to the result. SOFT-only violations
-     * do not block persistence; HARD violations cause the result to be marked
-     * unsuccessful.
-     */
     private void validatePlanning(List<Soutenance> generated, List<Professeur> allProfs, List<Salle> salles,
                                   PlanningDates planningDates, List<String> slotLabels, PlanningConfig cfg,
                                   PlanningResult result) {
         ConstraintSet c = cfg.getConstraints();
 
-        // ── Salle conflicts (HARD) ──────────────────────────────────────────
-        Map<String, Integer> roomSlotCount = new HashMap<>();
         Map<String, Integer> roomDailyCount = new HashMap<>();
         Map<Long, Map<String, Integer>> profDaily = new HashMap<>();
         Map<Long, Integer> profJuryCount = new HashMap<>();
-
-        for (Soutenance s : generated) {
-            if (s.getSalle() == null || s.getDate() == null) continue;
-            String dateStr = isoDate(s.getDate());
-            String slot = s.getHeure();
-            String roomSlotKey = dateStr + "|" + slot + "|" + s.getSalle().getId_salle();
-            roomSlotCount.merge(roomSlotKey, 1, Integer::sum);
-            // Each (date, salle) pair is incremented once per project, not once per student
-            // The grouping by jury+date+slot+salle naturally collapses binomes.
-        }
 
         Set<String> roomProjectSeen = new HashSet<>();
         for (Soutenance s : generated) {
@@ -646,9 +896,10 @@ public class PlanningServiceImpl implements PlanningService {
             String dateStr = isoDate(s.getDate());
             String key = dateStr + "|" + s.getHeure() + "|" + s.getSalle().getId_salle()
                     + "|" + (s.getJury() == null ? "0" : s.getJury().getIdJury());
-            if (!roomProjectSeen.add(key)) continue;
-            String dailyKey = dateStr + "|" + s.getSalle().getId_salle();
-            roomDailyCount.merge(dailyKey, 1, Integer::sum);
+            if (roomProjectSeen.add(key)) {
+                String dailyKey = dateStr + "|" + s.getSalle().getId_salle();
+                roomDailyCount.merge(dailyKey, 1, Integer::sum);
+            }
         }
 
         // Detect actual slot collisions (different juries at same slot/room)
@@ -668,7 +919,6 @@ public class PlanningServiceImpl implements PlanningService {
             }
         }
 
-        // Max soutenances/salle/jour
         int maxRoom = c.getMaxSoutenancesPerRoomPerDay();
         for (Map.Entry<String, Integer> e : roomDailyCount.entrySet()) {
             if (e.getValue() > maxRoom) {
@@ -681,7 +931,6 @@ public class PlanningServiceImpl implements PlanningService {
             }
         }
 
-        // ── Professor conflicts ─────────────────────────────────────────────
         Map<String, Set<Long>> juriesByProfSlot = new HashMap<>();
         for (Soutenance s : generated) {
             if (s.getJury() == null || s.getDate() == null) continue;
@@ -707,7 +956,6 @@ public class PlanningServiceImpl implements PlanningService {
             }
         }
 
-        // Max per prof per day
         int maxProf = c.getMaxSoutenancesPerProfPerDay();
         for (Map.Entry<Long, Map<String, Integer>> e : profDaily.entrySet()) {
             for (Map.Entry<String, Integer> dayEntry : e.getValue().entrySet()) {
@@ -722,7 +970,6 @@ public class PlanningServiceImpl implements PlanningService {
             }
         }
 
-        // Jury load gap (SOFT or HARD depending on user choice)
         if (!profJuryCount.isEmpty()) {
             int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
             for (int v : profJuryCount.values()) { min = Math.min(min, v); max = Math.max(max, v); }
@@ -736,7 +983,6 @@ public class PlanningServiceImpl implements PlanningService {
             }
         }
 
-        // Min distinct jury members + encadrant != rapporteur (HARD)
         int distinctMin = c.getMinDistinctJuryMembers();
         for (Soutenance s : generated) {
             Jury j = s.getJury();
@@ -752,6 +998,217 @@ public class PlanningServiceImpl implements PlanningService {
                         "Le moteur a echoue a trouver 3 profs distincts."));
             }
         }
+
+        // ── New operational constraints ─────────────────────────────────────
+        validateOperationalConstraints(generated, cfg, result);
+    }
+
+    /**
+     * Operational constraint pass: max-per-half-day, jury repetition,
+     * min president grade, external member presence, language compatibility,
+     * session deadline, consecutive-slot rule.
+     */
+    private void validateOperationalConstraints(List<Soutenance> generated, PlanningConfig cfg,
+                                                 PlanningResult result) {
+        ConstraintSet c = cfg.getConstraints();
+
+        // Max soutenances per prof per half-day
+        int maxHalfday = c.getMaxSoutenancesPerHalfday();
+        ConstraintPriority halfdayPriority = c.priorityOf(ConstraintIds.MAX_SOUTENANCES_PER_HALFDAY);
+        Map<String, Integer> profHalfdayCount = new HashMap<>();
+        for (Soutenance s : generated) {
+            if (s.getDate() == null || s.getJury() == null) continue;
+            String dateStr = isoDate(s.getDate());
+            String halfday = isMorningSlot(s.getHeure()) ? "AM" : "PM";
+            for (Professeur p : profsOfJury(s.getJury())) {
+                if (p == null) continue;
+                String key = dateStr + "|" + halfday + "|" + p.getIdp();
+                profHalfdayCount.merge(key, 1, Integer::sum);
+            }
+        }
+        for (Map.Entry<String, Integer> e : profHalfdayCount.entrySet()) {
+            if (e.getValue() > maxHalfday) {
+                result.addViolation(new ConstraintViolation(ConstraintIds.MAX_SOUTENANCES_PER_HALFDAY,
+                        c.labelOf(ConstraintIds.MAX_SOUTENANCES_PER_HALFDAY),
+                        halfdayPriority,
+                        e.getKey() + " : " + e.getValue() + " soutenances (max " + maxHalfday + " par demi-journee).",
+                        "Etalez la charge sur plusieurs demi-journees ou augmentez le seuil."));
+            }
+        }
+
+        // Jury repetition cap
+        int maxRep = c.getMaxJuryRepetition();
+        ConstraintPriority repPriority = c.priorityOf(ConstraintIds.MAX_JURY_REPETITION);
+        Map<String, Integer> juryTriadCount = new HashMap<>();
+        Set<String> seenSoutenanceJury = new HashSet<>();
+        for (Soutenance s : generated) {
+            entities.Jury j = s.getJury();
+            if (j == null) continue;
+            String dedupKey = j.getIdJury() + "|" + (s.getEtudiant() == null ? "0" : s.getEtudiant().getIde());
+            if (!seenSoutenanceJury.add(dedupKey)) continue;
+            String triadKey = juryTriadKey(j);
+            juryTriadCount.merge(triadKey, 1, Integer::sum);
+        }
+        for (Map.Entry<String, Integer> e : juryTriadCount.entrySet()) {
+            if (e.getValue() > maxRep) {
+                result.addViolation(new ConstraintViolation(ConstraintIds.MAX_JURY_REPETITION,
+                        c.labelOf(ConstraintIds.MAX_JURY_REPETITION),
+                        repPriority,
+                        "La meme triade de jury (" + e.getKey() + ") apparait " + e.getValue()
+                                + " fois (max " + maxRep + ").",
+                        "Diversifiez la composition des jurys ou augmentez le seuil."));
+            }
+        }
+
+        // President min grade
+        entities.ProfesseurGrade minGrade = c.getMinPresidentGrade();
+        if (minGrade != null) {
+            ConstraintPriority gradePriority = c.priorityOf(ConstraintIds.MIN_PRESIDENT_GRADE);
+            for (Soutenance s : generated) {
+                entities.Jury j = s.getJury();
+                if (j == null || j.getPresident() == null) continue;
+                Professeur pres = j.getPresident();
+                if (pres.getGrade() == null
+                        || pres.getGrade().getSeniorityScore() < minGrade.getSeniorityScore()) {
+                    result.addViolation(new ConstraintViolation(ConstraintIds.MIN_PRESIDENT_GRADE,
+                            c.labelOf(ConstraintIds.MIN_PRESIDENT_GRADE),
+                            gradePriority,
+                            "President " + pres.getNom() + " (" + (pres.getGrade() == null ? "?" : pres.getGrade())
+                                    + ") en-dessous du grade minimum " + minGrade + ".",
+                            "Designez un encadrant de grade au moins " + minGrade + " pour ce projet."));
+                }
+            }
+        }
+
+        // External member presence
+        if (c.isRequireExternalMember()) {
+            ConstraintPriority extPriority = c.priorityOf(ConstraintIds.REQUIRE_EXTERNAL_MEMBER);
+            for (Soutenance s : generated) {
+                entities.Jury j = s.getJury();
+                if (j == null) continue;
+                boolean hasExternal = false;
+                for (Professeur p : profsOfJury(j)) {
+                    if (p != null && !p.isInternal()) { hasExternal = true; break; }
+                }
+                if (!hasExternal) {
+                    result.addViolation(new ConstraintViolation(ConstraintIds.REQUIRE_EXTERNAL_MEMBER,
+                            c.labelOf(ConstraintIds.REQUIRE_EXTERNAL_MEMBER),
+                            extPriority,
+                            "Aucun membre externe pour la soutenance #"
+                                    + (s.getIds() == null ? "?" : s.getIds()) + ".",
+                            "Ajoutez un professeur externe au jury ou desactivez la regle."));
+                }
+            }
+        }
+
+        // Language requirement
+        if (c.isRespectLanguageRequirement()) {
+            ConstraintPriority langPriority = c.priorityOf(ConstraintIds.RESPECT_LANGUAGE_REQUIREMENT);
+            for (Soutenance s : generated) {
+                if (s.getEtudiant() == null) continue;
+                String lang = s.getEtudiant().getLanguage();
+                if (lang == null || lang.equalsIgnoreCase("fr")) continue;
+                entities.Jury j = s.getJury();
+                if (j == null) continue;
+                boolean ok = false;
+                for (Professeur p : profsOfJury(j)) {
+                    if (p == null) continue;
+                    if (p.speaksLanguage(lang) || p.speaksLanguage("en") || p.speaksLanguage("ag")) {
+                        ok = true; break;
+                    }
+                }
+                if (!ok) {
+                    result.addViolation(new ConstraintViolation(ConstraintIds.RESPECT_LANGUAGE_REQUIREMENT,
+                            c.labelOf(ConstraintIds.RESPECT_LANGUAGE_REQUIREMENT),
+                            langPriority,
+                            "Aucun membre du jury ne parle '" + lang + "' (sujet de "
+                                    + s.getEtudiant().getNomE() + ").",
+                            "Ajoutez un membre parlant la langue requise ou desactivez la regle."));
+                }
+            }
+        }
+
+        // Session deadline
+        if (c.isRespectSessionDeadline()) {
+            ConstraintPriority deadlinePriority = c.priorityOf(ConstraintIds.RESPECT_SESSION_DEADLINE);
+            for (Soutenance s : generated) {
+                if (s.getSession() == null || s.getSession().getDeadlineDate() == null) continue;
+                if (s.getDate() != null && s.getDate().after(s.getSession().getDeadlineDate())) {
+                    result.addViolation(new ConstraintViolation(ConstraintIds.RESPECT_SESSION_DEADLINE,
+                            c.labelOf(ConstraintIds.RESPECT_SESSION_DEADLINE),
+                            deadlinePriority,
+                            "Soutenance prevue le " + isoDate(s.getDate()) + " apres la date butoir "
+                                    + isoDate(s.getSession().getDeadlineDate()) + ".",
+                            "Avancez la date ou repoussez la deadline de la session."));
+                }
+            }
+        }
+
+        // Avoid same prof on strictly consecutive slots
+        if (c.isForbidConsecutiveSlots()) {
+            ConstraintPriority consecPriority = c.priorityOf(ConstraintIds.FORBID_CONSECUTIVE_SLOTS);
+            int stride = cfg.getSlotStrideMinutes();
+            Map<Long, List<int[]>> byProf = new HashMap<>();
+            for (Soutenance s : generated) {
+                if (s.getDate() == null || s.getJury() == null || s.getHeure() == null) continue;
+                int[] slot = parseSlotLabelLocal(s.getHeure());
+                int startMin = slot[0] * 60 + slot[1];
+                String dateStr = isoDate(s.getDate());
+                int dayKey = dateKeyHash(dateStr);
+                for (Professeur p : profsOfJury(s.getJury())) {
+                    if (p == null) continue;
+                    byProf.computeIfAbsent(p.getIdp(), k -> new ArrayList<>())
+                            .add(new int[]{dayKey, startMin});
+                }
+            }
+            for (Map.Entry<Long, List<int[]>> e : byProf.entrySet()) {
+                List<int[]> list = e.getValue();
+                list.sort(Comparator.comparingInt((int[] a) -> a[0]).thenComparingInt(a -> a[1]));
+                for (int i = 1; i < list.size(); i++) {
+                    int[] a = list.get(i - 1);
+                    int[] b = list.get(i);
+                    if (a[0] == b[0] && (b[1] - a[1]) <= stride) {
+                        result.addViolation(new ConstraintViolation(ConstraintIds.FORBID_CONSECUTIVE_SLOTS,
+                                c.labelOf(ConstraintIds.FORBID_CONSECUTIVE_SLOTS),
+                                consecPriority,
+                                "Prof #" + e.getKey() + " : 2 soutenances consecutives a "
+                                        + a[1] / 60 + "h" + String.format(java.util.Locale.ROOT, "%02d", a[1] % 60)
+                                        + " et " + b[1] / 60 + "h" + String.format(java.util.Locale.ROOT, "%02d", b[1] % 60),
+                                "Ajoutez une pause ou deplacez l'une des deux soutenances."));
+                        break; // one warning per prof is enough
+                    }
+                }
+            }
+        }
+    }
+
+    private static String juryTriadKey(entities.Jury j) {
+        Long p = j.getPresident() == null ? null : j.getPresident().getIdp();
+        Long r1 = j.getRapporteur1() == null ? null : j.getRapporteur1().getIdp();
+        Long r2 = j.getRapporteur2() == null ? null : j.getRapporteur2().getIdp();
+        long[] arr = new long[]{p == null ? -1 : p, r1 == null ? -1 : r1, r2 == null ? -1 : r2};
+        java.util.Arrays.sort(arr);
+        return arr[0] + "-" + arr[1] + "-" + arr[2];
+    }
+
+    private static boolean isMorningSlot(String heure) {
+        if (heure == null) return true;
+        int[] slot = parseSlotLabelLocal(heure);
+        return slot[0] < 13;
+    }
+
+    private static int[] parseSlotLabelLocal(String slotLabel) {
+        if (slotLabel == null) return new int[]{0, 0};
+        String s = slotLabel.replace("h", ":").trim();
+        if (s.endsWith(":")) s = s + "00";
+        try {
+            String[] parts = s.split(":");
+            int h = Integer.parseInt(parts[0]);
+            int m = parts.length > 1 ? Integer.parseInt(parts[1]) : 0;
+            return new int[]{h, m};
+        } catch (Exception e) {
+            return new int[]{0, 0};
+        }
     }
 
     private List<Professeur> profsOfJury(Jury j) {
@@ -759,6 +1216,7 @@ public class PlanningServiceImpl implements PlanningService {
         if (j.getPresident() != null) out.add(j.getPresident());
         if (j.getRapporteur1() != null) out.add(j.getRapporteur1());
         if (j.getRapporteur2() != null) out.add(j.getRapporteur2());
+        if (j.getInvite() != null) out.add(j.getInvite());
         return out;
     }
 
@@ -813,7 +1271,6 @@ public class PlanningServiceImpl implements PlanningService {
         if (heure == null) return 99;
         try {
             String h = heure.replace("h", "").trim();
-            // "9" or "9:30" or "930"
             if (h.contains(":")) {
                 String[] parts = h.split(":");
                 return Integer.parseInt(parts[0]) * 60 + Integer.parseInt(parts[1]);

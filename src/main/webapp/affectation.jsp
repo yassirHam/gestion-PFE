@@ -341,6 +341,109 @@
         </c:choose>
     </div>
 
+    <!-- ─── Affectation lifecycle & manual overrides ─────────────── -->
+    <c:if test="${not empty allAffectations}">
+        <div class="card p-3 p-md-4 mt-4">
+            <h5 class="fw-bold mb-3"><i class="fa-solid fa-screwdriver-wrench text-primary me-2"></i> Cycle de vie &amp; surcharges manuelles</h5>
+            <p class="text-muted small">
+                Validez, verrouillez ou forcez l'encadrant d'une affectation. Les affectations verrouillées sont
+                préservées lors d'une nouvelle exécution de l'affectation automatique.
+            </p>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle">
+                    <thead><tr><th>Étudiant</th><th>Filière</th><th>Encadrant</th><th>État</th><th>Verrouillée</th><th class="text-end">Actions</th></tr></thead>
+                    <tbody>
+                    <c:forEach var="a" items="${allAffectations}">
+                        <tr>
+                            <td><strong><c:out value="${a.etudiant.nomE} ${a.etudiant.prenomE}"/></strong>
+                                <div class="text-tiny text-muted"><c:out value="${a.etudiant.cne}"/></div>
+                            </td>
+                            <td><c:out value="${a.etudiant.filiere}"/></td>
+                            <td><c:out value="${a.encadrant.nom} ${a.encadrant.prenom}"/></td>
+                            <td><span class="badge bg-${a.lifecycleState.bootstrap}"><c:out value="${a.lifecycleState.label}"/></span>
+                                <c:if test="${a.manualOverride}"><i class="fa-solid fa-hand-pointer text-info ms-1" title="Surcharge manuelle"></i></c:if>
+                            </td>
+                            <td>
+                                <c:choose>
+                                    <c:when test="${a.locked}"><i class="fa-solid fa-lock text-warning"></i></c:when>
+                                    <c:otherwise><span class="text-tiny text-muted">non</span></c:otherwise>
+                                </c:choose>
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    <c:if test="${a.lifecycleState == 'DRAFT' or a.lifecycleState == 'REJECTED'}">
+                                        <form method="post" action="transitionAffectation.do" class="d-inline">
+                                            <input type="hidden" name="id" value="${a.ida}">
+                                            <input type="hidden" name="state" value="PENDING_VALIDATION">
+                                            <button class="btn btn-outline-info" title="Soumettre pour validation"><i class="fa-solid fa-paper-plane"></i></button>
+                                        </form>
+                                    </c:if>
+                                    <c:if test="${a.lifecycleState == 'PENDING_VALIDATION' and (currentUser.role == 'ADMIN_PEDAGOGIQUE' or currentUser.role == 'CHEF_DEPARTEMENT')}">
+                                        <form method="post" action="transitionAffectation.do" class="d-inline">
+                                            <input type="hidden" name="id" value="${a.ida}">
+                                            <input type="hidden" name="state" value="VALIDATED">
+                                            <button class="btn btn-outline-success" title="Valider"><i class="fa-solid fa-check"></i></button>
+                                        </form>
+                                    </c:if>
+                                    <c:choose>
+                                        <c:when test="${a.locked}">
+                                            <form method="post" action="lockAffectation.do" class="d-inline">
+                                                <input type="hidden" name="id" value="${a.ida}">
+                                                <input type="hidden" name="lock" value="false">
+                                                <button class="btn btn-outline-success" title="Déverrouiller"><i class="fa-solid fa-lock-open"></i></button>
+                                            </form>
+                                        </c:when>
+                                        <c:otherwise>
+                                            <form method="post" action="lockAffectation.do" class="d-inline">
+                                                <input type="hidden" name="id" value="${a.ida}">
+                                                <button class="btn btn-outline-warning" title="Verrouiller"><i class="fa-solid fa-lock"></i></button>
+                                            </form>
+                                        </c:otherwise>
+                                    </c:choose>
+                                    <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#force-${a.ida}" title="Forcer encadrant">
+                                        <i class="fa-solid fa-hand-pointer"></i>
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                        <!-- Force encadrant modal -->
+                        <div class="modal fade" id="force-${a.ida}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <form method="post" action="forceAffectation.do" class="modal-content">
+                                    <input type="hidden" name="id" value="${a.ida}">
+                                    <div class="modal-header"><h5 class="modal-title">Forcer un encadrant</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                                    <div class="modal-body row g-2">
+                                        <div class="col-12">
+                                            <label class="small fw-semibold">Étudiant</label>
+                                            <input type="text" class="form-control" value="${a.etudiant.nomE} ${a.etudiant.prenomE}" disabled>
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="small fw-semibold">Nouvel encadrant</label>
+                                            <select name="encadrantId" class="form-select" required>
+                                                <option value="">— Sélectionner —</option>
+                                                <c:forEach var="p" items="${allProfs}">
+                                                    <c:if test="${not p.excluded}">
+                                                        <option value="${p.idp}"><c:out value="${p.nom} ${p.prenom}"/> — <c:out value="${p.discipline}"/></option>
+                                                    </c:if>
+                                                </c:forEach>
+                                            </select>
+                                        </div>
+                                        <div class="col-12">
+                                            <label class="small fw-semibold">Motif</label>
+                                            <textarea name="reason" class="form-control" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                    <div class="modal-footer"><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Annuler</button><button class="btn btn-primary">Forcer</button></div>
+                                </form>
+                            </div>
+                        </div>
+                    </c:forEach>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </c:if>
+
 </div>
     </div>
 </div>

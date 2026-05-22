@@ -201,8 +201,15 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm mb-4">
     <div class="container-fluid px-3 px-lg-4">
         <a class="navbar-brand d-flex align-items-center" href="index.jsp">
-            <img src="images/logo.png" alt="Logo" style="height: 38px; margin-right: 12px; object-fit: contain;">
-            Gestion PFE
+            <c:choose>
+                <c:when test="${not empty appSettings and appSettings.hasLogo()}">
+                    <img src="logo.do" alt="Logo" style="height: 38px; margin-right: 12px; object-fit: contain;">
+                </c:when>
+                <c:otherwise>
+                    <i class="fa-solid fa-graduation-cap me-2 text-primary" style="font-size: 28px;"></i>
+                </c:otherwise>
+            </c:choose>
+            <c:out value="${empty appSettings.institutionName ? 'Gestion PFE' : appSettings.institutionName}"/>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
             <span class="navbar-toggler-icon"></span>
@@ -223,6 +230,9 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="dashboard.do"><i class="fa-solid fa-chart-pie me-1"></i>Dashboard</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="settings.do"><i class="fa-solid fa-gear me-1"></i>Paramètres</a>
                 </li>
             </ul>
         </div>

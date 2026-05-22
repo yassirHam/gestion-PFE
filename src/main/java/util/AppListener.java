@@ -19,6 +19,12 @@ public class AppListener implements ServletContextListener {
         System.out.println("✅ Application démarrée — Hibernate SessionFactory initialisée");
         // Force l'initialisation du singleton au démarrage
         HibernateUtil.getSessionFactory();
+        try {
+            services.AppSettingsService.getInstance().get();
+            System.out.println("✅ AppSettings chargés (ou initialisés avec valeurs par défaut)");
+        } catch (Exception e) {
+            System.err.println("⚠️ Impossible de charger les AppSettings au démarrage: " + e.getMessage());
+        }
     }
 
     @Override

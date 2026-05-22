@@ -576,7 +576,7 @@ public class PfeServiceImpl implements PfeService {
 
         Salle s = new Salle();
         s.setNum_salle(trimmed);
-        s.setBlock("Bloc Principal");
+        s.setBlock("");
         s.setStatus("Libre");
         salleDao.save(s);
         return true;
@@ -604,7 +604,7 @@ public class PfeServiceImpl implements PfeService {
         for (Salle s : imported) {
             String key = normalizeSalleName(s.getNum_salle());
             if (key.isEmpty() || !existingKeys.add(key)) continue;
-            if (s.getBlock() == null || s.getBlock().isEmpty()) s.setBlock("Bloc Principal");
+            if (s.getBlock() == null) s.setBlock("");
             if (s.getStatus() == null || s.getStatus().isEmpty()) s.setStatus("Libre");
             toSave.add(s);
         }
@@ -673,12 +673,10 @@ public class PfeServiceImpl implements PfeService {
 
     private String normalizeSalleName(String numSalle) {
         if (numSalle == null) return "";
-        String normalized = numSalle.trim().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
-        normalized = normalized.replaceFirst("^SALLE\\s*", "S");
-        normalized = normalized.replaceFirst("^S\\s+(\\d)", "S$1");
-        normalized = normalized.replaceFirst("^ANCIEN\\s+BLOC\\s*", "AB");
-        normalized = normalized.replaceFirst("^NOUVEAU\\s+BLOC\\s*", "NB");
-        return normalized;
+        // Generic normalization: collapse whitespace and uppercase. We don't
+        // make any assumption about the establishment's room naming scheme
+        // (e.g. blocks, building codes...) since those vary per institution.
+        return numSalle.trim().replaceAll("\\s+", " ").toUpperCase(Locale.ROOT);
     }
 
     private void normalizeBinomeSubjects(List<Etudiant> etudiants) {

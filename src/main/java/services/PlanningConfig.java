@@ -167,7 +167,7 @@ public final class PlanningConfig {
         private int endHourAfternoon = 18;
         private int soutenanceDurationMinutes = 60;
         private int breakBetweenMinutes = 0;
-        private List<String> defaultRooms = Arrays.asList("S3 AB", "S4 AB", "S3 NB", "S2 NB", "AMPHI A");
+        private List<String> defaultRooms = new ArrayList<>();
         private List<String> professorColorPalette = Arrays.asList(
                 "E74C3C", "3498DB", "2ECC71", "F39C12", "9B59B6",
                 "1ABC9C", "E67E22", "2980B9", "27AE60", "8E44AD",

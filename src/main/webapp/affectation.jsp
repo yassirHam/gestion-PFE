@@ -1,5 +1,14 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
 <%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
+<%! 
+    // Tiny helpers used to render filiere badges with colors derived from the filiere code.
+    public String filiereColorHex(Object f) {
+        return util.FiliereColors.hex(f == null ? "" : f.toString());
+    }
+    public boolean filiereWhiteText(Object f) {
+        return util.FiliereColors.prefersWhiteText(f == null ? "" : f.toString());
+    }
+%>
 
 <!DOCTYPE html>
 <html lang="fr">
@@ -14,9 +23,17 @@
             background-color: #f8f9fa;
             font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        .badge-GI   { background-color: #0d6efd; color: white; }
-        .badge-ID   { background-color: #ffc107; color: black; }
-        .badge-TDIA { background-color: #198754; color: white; }
+        .filiere-badge {
+            display: inline-block;
+            padding: 0.35em 0.65em;
+            font-size: 0.75em;
+            font-weight: 700;
+            line-height: 1;
+            text-align: center;
+            white-space: nowrap;
+            vertical-align: baseline;
+            border-radius: 0.375rem;
+        }
 
         .fichier-item {
             border: 1px solid #ddd;
@@ -57,8 +74,15 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm mb-4">
     <div class="container-fluid px-3 px-lg-4">
         <a class="navbar-brand d-flex align-items-center" href="index.jsp">
-            <img src="images/logo.png" alt="Logo" style="height: 38px; margin-right: 12px; object-fit: contain;">
-            Gestion PFE
+            <c:choose>
+                <c:when test="${not empty appSettings and appSettings.hasLogo()}">
+                    <img src="logo.do" alt="Logo" style="height: 38px; margin-right: 12px; object-fit: contain;">
+                </c:when>
+                <c:otherwise>
+                    <i class="fa-solid fa-graduation-cap me-2 text-primary" style="font-size: 28px;"></i>
+                </c:otherwise>
+            </c:choose>
+            <c:out value="${empty appSettings.institutionName ? 'Gestion PFE' : appSettings.institutionName}"/>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
@@ -79,6 +103,9 @@
                 </li>
                 <li class="nav-item">
                     <a class="nav-link" href="dashboard.do"><i class="fa-solid fa-chart-pie me-1"></i> Dashboard</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="settings.do"><i class="fa-solid fa-gear me-1"></i>Paramètres</a>
                 </li>
             </ul>
         </div>
@@ -121,7 +148,7 @@
                 <div class="col-12 col-lg-6">
                     <div class="border rounded p-3 bg-white h-100">
                         <h6 class="fw-bold"><i class="fa-solid fa-user-graduate text-primary me-1"></i>
-                            Feuille par filière (ex: <code>GI</code>, <code>ID</code>, <code>TDIA</code>, ...)</h6>
+                            Feuille par filière (ex: <code>GI</code>, <code>ID</code>, <code>TDIA</code>, <code>L3-INFO</code>, <code>M2-DATA</code>...)</h6>
                         <p class="small text-muted mb-2">Le <strong>nom de la feuille</strong> est utilisé comme code filière.</p>
                         <div class="table-responsive">
                             <table class="table table-bordered table-sm text-center mb-0" style="font-size:0.78rem;">
@@ -192,7 +219,7 @@
                                         <td>NUM_SALLE</td><td>BLOCK</td><td>STATUS</td>
                                     </tr>
                                     <tr class="text-muted fst-italic">
-                                        <td>S3 AB</td><td>Ancien Bloc</td><td>Libre</td>
+                                        <td>Salle 101</td><td>Bâtiment principal</td><td>Libre</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -236,10 +263,9 @@
                         <c:forEach var="f" items="${fichiers}">
                             <label class="fichier-item">
                                 <input type="checkbox" name="selectedFilieres" value="${f.filiere}" checked>
-                                <span class="
-                                    ${f.filiere == 'GI' ? 'badge-GI' :
-                                      f.filiere == 'ID' ? 'badge-ID' :
-                                      f.filiere == 'TDIA' ? 'badge-TDIA' : 'bg-secondary text-white'} badge">
+                                <span class="filiere-badge"
+                                      style="background-color:#<%= filiereColorHex(((entities.FichierListe)pageContext.findAttribute("f")).getFiliere()) %>;
+                                             color:<%= filiereWhiteText(((entities.FichierListe)pageContext.findAttribute("f")).getFiliere()) ? "white" : "#1e293b" %>;">
                                     ${f.filiere}
                                 </span>
                                 <strong class="text-truncate" style="max-width: 200px;">${f.nomFichier}</strong>

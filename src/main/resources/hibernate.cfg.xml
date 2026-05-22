@@ -32,6 +32,7 @@
         <mapping class="entities.Soutenance"/>
         <mapping class="entities.Salle"/>
         <mapping class="entities.Jury"/>
+        <mapping class="entities.AppSettings"/>
 
 
     </session-factory>

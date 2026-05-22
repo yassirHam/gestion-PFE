@@ -87,8 +87,15 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow-sm">
     <div class="container-fluid px-3 px-lg-4">
         <a class="navbar-brand d-flex align-items-center" href="index.jsp">
-            <img src="images/logo.png" alt="Logo" style="height: 38px; margin-right: 12px; object-fit: contain;">
-            Gestion PFE
+            <c:choose>
+                <c:when test="${not empty appSettings and appSettings.hasLogo()}">
+                    <img src="logo.do" alt="Logo" style="height: 38px; margin-right: 12px; object-fit: contain;">
+                </c:when>
+                <c:otherwise>
+                    <i class="fa-solid fa-graduation-cap me-2 text-primary" style="font-size: 28px;"></i>
+                </c:otherwise>
+            </c:choose>
+            <c:out value="${empty appSettings.institutionName ? 'Gestion PFE' : appSettings.institutionName}"/>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
             <span class="navbar-toggler-icon"></span>
@@ -110,6 +117,9 @@
                 <li class="nav-item">
                     <a class="nav-link active" href="dashboard.do"><i class="fa-solid fa-chart-pie me-1"></i> Dashboard</a>
                 </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="settings.do"><i class="fa-solid fa-gear me-1"></i>Paramètres</a>
+                </li>
             </ul>
         </div>
     </div>
@@ -124,7 +134,12 @@
                 <input type="text" name="q" class="form-control form-control-sm me-2" placeholder="Chercher un étudiant ou un prof..." value="${searchQuery}" required>
                 <button type="submit" class="btn btn-sm btn-primary"><i class="fa-solid fa-search"></i></button>
             </form>
-            <span class="badge bg-secondary p-2 align-self-start align-self-sm-center">Année 2025/2026</span>
+            <span class="badge bg-secondary p-2 align-self-start align-self-sm-center">
+                <c:choose>
+                    <c:when test="${not empty appSettings.academicYear}">Année <c:out value="${appSettings.academicYear}"/></c:when>
+                    <c:otherwise>&nbsp;</c:otherwise>
+                </c:choose>
+            </span>
         </div>
     </div>
 

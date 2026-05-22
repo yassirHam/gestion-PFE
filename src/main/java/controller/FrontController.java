@@ -90,29 +90,14 @@ public class FrontController extends HttpServlet {
     // --------------------------------------------------------------------------
 
     private services.PfeService service = services.ServiceFactory.createPfeService();
-    private static final String LOGO_FILE_NAME = "t1.png";
-    private static final String LOGO_WEB_PATH = "/assets/" + LOGO_FILE_NAME;
 
     private static final DeviceRgb COLOR_HEADER                = new DeviceRgb(0.000f, 0.000f, 0.000f); // Black
     private static final DeviceRgb COLOR_HEADER_AFFECTATION    = new DeviceRgb(18, 52, 153);             // #123499
-    //colors for Planning PDF
-    private static final DeviceRgb COLOR_GI                    = new DeviceRgb(0.400f, 0.600f, 0.900f); // Blue
-    private static final DeviceRgb COLOR_ID                    = new DeviceRgb(0.950f, 0.800f, 0.300f); // Yellow
-    private static final DeviceRgb COLOR_TDIA                  = new DeviceRgb(0.450f, 0.750f, 0.450f); // Green
     //colors for Affectation PDF
-    private static final DeviceRgb COLOR_GI_LIGHT              = new DeviceRgb(0.400f, 0.600f, 0.900f);           
-    private static final DeviceRgb COLOR_ID_LIGHT              = new DeviceRgb(0.950f, 0.800f, 0.300f);           
-    private static final DeviceRgb COLOR_TDIA_LIGHT            = new DeviceRgb(0.450f, 0.750f, 0.450f);               
     private static final DeviceRgb COLOR_EMPTY                 = new DeviceRgb(0.950f, 0.950f, 0.950f);
     // Couleurs DOCX
     private static final String C_HEADER_DOCX                  = "000000"; // Black
     private static final String C_HEADER_DOCX_AFFECTATION      = "123499"; // #123499
-    private static final String C_GI_DOCX                      = "4F8AFF"; // Blue
-    private static final String C_ID_DOCX                      = "FFC107"; // Yellow
-    private static final String C_TDIA_DOCX                    = "689F38"; // Green
-    private static final String C_GI_DOCX_LIGHT                = "B388FF"; // #b388ff
-    private static final String C_ID_DOCX_LIGHT                = "FDA172"; // #fda172
-    private static final String C_TDIA_DOCX_LIGHT              = "009B00"; // #009b00
     private static final String C_EMPTY_DOCX                   = "F0F0F0";
     private static final String C_WHITE_DOCX                   = "FFFFFF";
 
@@ -121,25 +106,22 @@ public class FrontController extends HttpServlet {
     // --------------------------------------------------------------------------
 
     private byte[] readLogoBytes() throws IOException {
+        // 1) User-uploaded logo persisted in AppSettings (preferred)
+        try {
+            entities.AppSettings settings = services.AppSettingsService.getInstance().get();
+            if (settings != null && settings.getLogoBytes() != null && settings.getLogoBytes().length > 0) {
+                return settings.getLogoBytes();
+            }
+        } catch (Exception ignored) {
+        }
+
+        // 2) Fallback to a bundled placeholder if any (legacy /images/logo.png or /assets/t1.png)
         if (getServletContext() != null) {
-            try (InputStream is = getServletContext().getResourceAsStream(LOGO_WEB_PATH)) {
+            try (InputStream is = getServletContext().getResourceAsStream("/images/logo.png")) {
                 if (is != null) return is.readAllBytes();
             }
-        }
-
-        try (InputStream is = FrontController.class.getClassLoader().getResourceAsStream(LOGO_FILE_NAME)) {
-            if (is != null) return is.readAllBytes();
-        }
-
-        String[] candidates = {
-                LOGO_FILE_NAME,
-                "projet/src/main/webapp/assets/" + LOGO_FILE_NAME,
-                "src/main/webapp/assets/" + LOGO_FILE_NAME
-        };
-        for (String candidate : candidates) {
-            java.io.File file = new java.io.File(candidate);
-            if (file.exists() && file.isFile()) {
-                return java.nio.file.Files.readAllBytes(file.toPath());
+            try (InputStream is = getServletContext().getResourceAsStream("/assets/t1.png")) {
+                if (is != null) return is.readAllBytes();
             }
         }
         return null;
@@ -157,6 +139,42 @@ public class FrontController extends HttpServlet {
         doc.add(logo);
     }
 
+    /**
+     * Renders the establishment header (institution name, sub-title, document
+     * title and academic year) in a PDF document. Skips empty values so users
+     * who only configure a subset still get a clean layout.
+     */
+    private void addBrandingHeaderPdf(com.itextpdf.layout.Document doc, PdfFont bold, PdfFont normal,
+                                      String fallbackTitle,
+                                      int instSize, int subtSize, int titleSize, int yearSize,
+                                      int marginBottom) {
+        entities.AppSettings brand = services.AppSettingsService.getInstance().get();
+        String inst    = nullToEmpty(brand.getInstitutionName());
+        String subt    = nullToEmpty(brand.getInstitutionSubtitle());
+        String title   = brand.getDocumentTitle() != null && !brand.getDocumentTitle().isEmpty()
+                ? brand.getDocumentTitle()
+                : fallbackTitle;
+        String year    = nullToEmpty(brand.getAcademicYear());
+
+        if (!inst.isEmpty()) {
+            doc.add(new Paragraph(inst).setFont(bold).setFontSize(instSize)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
+        }
+        if (!subt.isEmpty()) {
+            doc.add(new Paragraph(subt).setFont(normal).setFontSize(subtSize)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
+        }
+        if (title != null && !title.isEmpty()) {
+            doc.add(new Paragraph(title).setFont(bold).setFontSize(titleSize)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
+        }
+        if (!year.isEmpty()) {
+            doc.add(new Paragraph("Annee Universitaire " + year).setFont(normal).setFontSize(yearSize)
+                    .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    .setMarginBottom(marginBottom));
+        }
+    }
+
     private void addDocxLogo(XWPFDocument doc) throws IOException {
         byte[] logoBytes = readLogoBytes();
         if (logoBytes == null) return;
@@ -167,12 +185,29 @@ public class FrontController extends HttpServlet {
         try (ByteArrayInputStream logoStream = new ByteArrayInputStream(logoBytes)) {
             run.addPicture(logoStream,
                     org.apache.poi.xwpf.usermodel.Document.PICTURE_TYPE_PNG,
-                    LOGO_FILE_NAME,
+                    "logo.png",
                     Units.toEMU(70),
                     Units.toEMU(70));
         } catch (InvalidFormatException e) {
-            throw new IOException("Impossible d'ajouter le logo ENSAH au document Word.", e);
+            throw new IOException("Impossible d'ajouter le logo au document Word.", e);
         }
+    }
+
+    /** DOCX equivalent of {@link #addBrandingHeaderPdf}. */
+    private void addBrandingHeaderDocx(XWPFDocument doc, String fallbackTitle,
+                                       int instSize, int subtSize, int titleSize, int yearSize) {
+        entities.AppSettings brand = services.AppSettingsService.getInstance().get();
+        String inst    = nullToEmpty(brand.getInstitutionName());
+        String subt    = nullToEmpty(brand.getInstitutionSubtitle());
+        String title   = brand.getDocumentTitle() != null && !brand.getDocumentTitle().isEmpty()
+                ? brand.getDocumentTitle()
+                : fallbackTitle;
+        String year    = nullToEmpty(brand.getAcademicYear());
+
+        if (!inst.isEmpty()) center(doc, inst, instSize, true);
+        if (!subt.isEmpty()) center(doc, subt, subtSize, false);
+        if (title != null && !title.isEmpty()) center(doc, title, titleSize, true);
+        if (!year.isEmpty()) center(doc, "Annee Universitaire " + year, yearSize, false);
     }
 
     private XWPFParagraph createTopParagraph(XWPFDocument doc) {
@@ -204,6 +239,13 @@ public class FrontController extends HttpServlet {
 
     private void processRequest(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         String path = req.getServletPath();
+
+        // Make branding available to every JSP without each handler having to remember.
+        try {
+            req.setAttribute("appSettings", services.AppSettingsService.getInstance().get());
+        } catch (Exception ignored) {
+            // Settings table may not exist yet on first boot; pages have safe defaults.
+        }
 
         switch (path) {
             case "/dashboard.do":
@@ -286,6 +328,24 @@ public class FrontController extends HttpServlet {
                 break;
             case "/config.do":
                 doConfig(req, resp);
+                break;
+            case "/settings.do":
+                doSettings(req, resp);
+                break;
+            case "/saveBranding.do":
+                doSaveBranding(req, resp);
+                break;
+            case "/saveStorage.do":
+                doSaveStorage(req, resp);
+                break;
+            case "/testStorage.do":
+                doTestStorage(req, resp);
+                break;
+            case "/saveNlp.do":
+                doSaveNlp(req, resp);
+                break;
+            case "/logo.do":
+                doLogo(req, resp);
                 break;
             default:
                 req.getRequestDispatcher("index.jsp").forward(req, resp);
@@ -405,16 +465,9 @@ public class FrontController extends HttpServlet {
         String prefix = "Planning_";
         if ("affectation".equals(type)) prefix = "Affectation_";
 
-        java.io.File historyDir = new java.io.File(getHistoryFolder());
-        if (historyDir.exists() && historyDir.isDirectory()) {
-            java.io.File[] files = historyDir.listFiles();
-            if (files != null) {
-                for (java.io.File f : files) {
-                    if (f.isFile() && f.getName().startsWith(prefix)) {
-                        f.delete();
-                    }
-                }
-            }
+        util.HistoryStorage storage = util.HistoryStorage.getInstance();
+        for (String name : storage.listFilesWithPrefix(prefix)) {
+            storage.delete(name);
         }
         String referer = req.getHeader("referer");
         if (referer != null) resp.sendRedirect(referer);
@@ -423,26 +476,17 @@ public class FrontController extends HttpServlet {
 
     private void doAffectation(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         req.setAttribute("fichiers", service.getAllFichiers());
-        
-        java.io.File historyDir = new java.io.File(getHistoryFolder());
-        List<String> historyTimestamps = new ArrayList<>();
-        if (historyDir.exists() && historyDir.isDirectory()) {
-            java.io.File[] files = historyDir.listFiles();
-            if (files != null) {
-                java.util.Set<String> tsSet = new java.util.HashSet<>();
-                for (java.io.File f : files) {
-                    if (f.isFile() && f.getName().startsWith("Affectation_")) {
-                        //Affectation_YYYY-MM-DD_HH-mm-ss.ext
-                        String name = f.getName();
-                        int extIndex = name.lastIndexOf('.');
-                        if (extIndex > 12) {
-                            tsSet.add(name.substring(12, extIndex));
-                        }
-                    }
-                }
-                historyTimestamps.addAll(tsSet);
+
+        util.HistoryStorage storage = util.HistoryStorage.getInstance();
+        java.util.Set<String> tsSet = new java.util.HashSet<>();
+        for (String name : storage.listFilesWithPrefix("Affectation_")) {
+            // Affectation_YYYY-MM-DD_HH-mm-ss.ext
+            int extIndex = name.lastIndexOf('.');
+            if (extIndex > 12) {
+                tsSet.add(name.substring(12, extIndex));
             }
         }
+        List<String> historyTimestamps = new ArrayList<>(tsSet);
         java.util.Collections.sort(historyTimestamps, java.util.Collections.reverseOrder());
         req.setAttribute("historyTimestamps", historyTimestamps);
 
@@ -452,13 +496,21 @@ public class FrontController extends HttpServlet {
     private void doRestoreAffectation(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         String ts = req.getParameter("timestamp");
         if (ts != null && !ts.isEmpty()) {
-            java.io.File txtFile = new java.io.File(getHistoryFolder(), "Affectation_" + ts + ".txt");
-            if (txtFile.exists()) {
+            String fileName = "Affectation_" + ts + ".txt";
+            util.HistoryStorage storage = util.HistoryStorage.getInstance();
+            if (storage.exists(fileName)) {
+                java.io.File tempTxt = null;
                 try {
-                    service.restoreAffectation(txtFile);
+                    tempTxt = java.io.File.createTempFile("affectation_restore_", ".txt");
+                    tempTxt.deleteOnExit();
+                    byte[] data = storage.read(fileName);
+                    java.nio.file.Files.write(tempTxt.toPath(), data);
+                    service.restoreAffectation(tempTxt);
                     req.getSession().setAttribute("affectationDone", true);
                 } catch (Exception e) {
                     e.printStackTrace();
+                } finally {
+                    if (tempTxt != null && tempTxt.exists()) tempTxt.delete();
                 }
             } else {
                 req.getSession().setAttribute("restoreError", "Désolé, cette affectation est trop ancienne et ne possède pas de sauvegarde de données (uniquement PDF/Word).");
@@ -539,11 +591,7 @@ public class FrontController extends HttpServlet {
         String base = fileName.contains(".")
                 ? fileName.substring(0, fileName.lastIndexOf(".")).trim()
                 : fileName.trim();
-        String lower = base.toLowerCase();
-        if (lower.equals("gi") || lower.contains("génie info") || lower.contains("genie info")) return "GI";
-        if (lower.equals("id") || lower.contains("ingénierie") || lower.contains("ingenierie")) return "ID";
-        if (lower.contains("tdia") || lower.contains("intelligence artificielle") || lower.contains("transformation digitale")) return "TDIA";
-        return base.toUpperCase().replaceAll("[^A-Z0-9]", "_");
+        return util.ExcelImporter.normalizeFiliere(base);
     }
 
     private void doUploadProfs(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
@@ -612,33 +660,39 @@ public class FrontController extends HttpServlet {
         req.getSession().setAttribute("lastFilieres", filieres);
         req.getSession().setAttribute("affectationDone", true);
         req.getSession().setAttribute("affectationDebug", debug);
-        
-        java.io.File historyDir = new java.io.File(getHistoryFolder());
-        if (!historyDir.exists()) historyDir.mkdirs();
-        
+
         String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
-        String pdfName = "Affectation_" + timestamp + ".pdf";
+        String pdfName  = "Affectation_" + timestamp + ".pdf";
         String docxName = "Affectation_" + timestamp + ".docx";
-        String txtName = "Affectation_" + timestamp + ".txt";
-        
-        try (java.io.FileOutputStream pdfOut = new java.io.FileOutputStream(new java.io.File(historyDir, pdfName));
-             java.io.FileOutputStream docxOut = new java.io.FileOutputStream(new java.io.File(historyDir, docxName));
-             java.io.PrintWriter txtOut = new java.io.PrintWriter(new java.io.File(historyDir, txtName))) {
-            generateAffectationPdfToStream(pdfOut, filieres);
-            generateAffectationDocxToStream(docxOut, filieres);
-            
-            for (entities.Affectation a : service.getAllAffectationsWithDetails()) {
-                if (a.getEtudiant() != null && a.getEncadrant() != null) {
-                    txtOut.println(a.getEtudiant().getIde() + "," + a.getEncadrant().getIdp());
+        String txtName  = "Affectation_" + timestamp + ".txt";
+
+        util.HistoryStorage storage = util.HistoryStorage.getInstance();
+        try {
+            ByteArrayOutputStream pdfBuf = new ByteArrayOutputStream();
+            generateAffectationPdfToStream(pdfBuf, filieres);
+            storage.write(pdfName, pdfBuf.toByteArray(), util.HistoryStorage.guessContentType(pdfName));
+
+            ByteArrayOutputStream docxBuf = new ByteArrayOutputStream();
+            generateAffectationDocxToStream(docxBuf, filieres);
+            storage.write(docxName, docxBuf.toByteArray(), util.HistoryStorage.guessContentType(docxName));
+
+            ByteArrayOutputStream txtBuf = new ByteArrayOutputStream();
+            try (java.io.PrintWriter txtOut = new java.io.PrintWriter(txtBuf, true, java.nio.charset.StandardCharsets.UTF_8)) {
+                for (entities.Affectation a : service.getAllAffectationsWithDetails()) {
+                    if (a.getEtudiant() != null && a.getEncadrant() != null) {
+                        txtOut.println(a.getEtudiant().getIde() + "," + a.getEncadrant().getIdp());
+                    }
                 }
             }
+            storage.write(txtName, txtBuf.toByteArray(), util.HistoryStorage.guessContentType(txtName));
         } catch (Exception e) {
             e.printStackTrace();
+            debug.add("Avertissement: ecriture historique echouee: " + e.getMessage());
         }
 
         req.setAttribute("fichiers", service.getAllFichiers());
         req.setAttribute("debug", debug);
-        
+
         resp.sendRedirect("affectation.do");
     }
 
@@ -678,24 +732,48 @@ public class FrontController extends HttpServlet {
 
         addPdfLogo(doc);
 
-        doc.add(new Paragraph("École Nationale des Sciences Appliquées – Al Hoceima")
-                .setFont(bold).setFontSize(13).setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
-        doc.add(new Paragraph("Département Mathématiques et Informatique")
-                .setFont(normal).setFontSize(11).setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
-        doc.add(new Paragraph("Affectation des encadrants de Projet de Fin d'Etude")
-                .setFont(normal).setFontSize(11).setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
-        doc.add(new Paragraph("Année Universitaire 2025/2026")
-                .setFont(normal).setFontSize(10).setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
-                .setMarginBottom(10));
+        entities.AppSettings brand = services.AppSettingsService.getInstance().get();
+        String inst    = nullToEmpty(brand.getInstitutionName());
+        String subt    = nullToEmpty(brand.getInstitutionSubtitle());
+        String docTitle = brand.getDocumentTitle() != null && !brand.getDocumentTitle().isEmpty()
+                ? brand.getDocumentTitle()
+                : "Affectation des encadrants de Projet de Fin d'Etudes";
+        String year    = nullToEmpty(brand.getAcademicYear());
 
-        Table legend = new Table(UnitValue.createPercentArray(new float[]{10, 10}))
-                .setHorizontalAlignment(com.itextpdf.layout.properties.HorizontalAlignment.CENTER)
-                .setMarginBottom(10);
+        if (!inst.isEmpty()) {
+            doc.add(new Paragraph(inst)
+                    .setFont(bold).setFontSize(13).setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
+        }
+        if (!subt.isEmpty()) {
+            doc.add(new Paragraph(subt)
+                    .setFont(normal).setFontSize(11).setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
+        }
+        doc.add(new Paragraph(docTitle)
+                .setFont(normal).setFontSize(11).setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
+        if (!year.isEmpty()) {
+            doc.add(new Paragraph("Annee Universitaire " + year)
+                    .setFont(normal).setFontSize(10).setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
+                    .setMarginBottom(10));
+        }
 
-        legend.addCell(legendCell("Filière ID", COLOR_ID_LIGHT, normal));
-        legend.addCell(legendCell("Filière GI", COLOR_GI_LIGHT, normal));
-        legend.addCell(legendCell("Filière TDIA", COLOR_TDIA_LIGHT, normal));
-        doc.add(legend);
+        // Build the legend dynamically from the filieres present in the affectations.
+        java.util.LinkedHashSet<String> filieresPresent = new java.util.LinkedHashSet<>();
+        for (Affectation a : affectations) {
+            if (a.getEtudiant() != null && a.getEtudiant().getFiliere() != null) {
+                filieresPresent.add(a.getEtudiant().getFiliere());
+            }
+        }
+        if (!filieresPresent.isEmpty()) {
+            float[] cols = new float[filieresPresent.size()];
+            java.util.Arrays.fill(cols, 10f);
+            Table legend = new Table(UnitValue.createPercentArray(cols))
+                    .setHorizontalAlignment(com.itextpdf.layout.properties.HorizontalAlignment.CENTER)
+                    .setMarginBottom(10);
+            for (String fil : filieresPresent) {
+                legend.addCell(legendCell("Filiere " + fil, filiereColorPdfAffectation(fil), normal));
+            }
+            doc.add(legend);
+        }
 
         Map<Professeur, List<Etudiant>> map = new LinkedHashMap<>();
         affectations.sort(Comparator.comparing((Affectation a) -> a.getEncadrant().getNom()));
@@ -814,17 +892,14 @@ public class FrontController extends HttpServlet {
     }
 
     private DeviceRgb filiereColorPdf(String filiere) {
-        if ("GI".equals(filiere))   return COLOR_GI;
-        if ("ID".equals(filiere))   return COLOR_ID;
-        if ("TDIA".equals(filiere)) return COLOR_TDIA;
-        return COLOR_EMPTY;
+        if (filiere == null || filiere.isEmpty()) return COLOR_EMPTY;
+        float[] rgb = util.FiliereColors.rgbFloat(filiere);
+        return new DeviceRgb(rgb[0], rgb[1], rgb[2]);
     }
 
     private DeviceRgb filiereColorPdfAffectation(String filiere) {
-        if ("GI".equals(filiere))   return COLOR_GI_LIGHT;
-        if ("ID".equals(filiere))   return COLOR_ID_LIGHT;
-        if ("TDIA".equals(filiere)) return COLOR_TDIA_LIGHT;
-        return COLOR_EMPTY;
+        // Same palette as the planning PDF — gives a consistent visual identity.
+        return filiereColorPdf(filiere);
     }
 
     // --------------------------------------------------------------------------
@@ -867,18 +942,37 @@ public class FrontController extends HttpServlet {
 
             addDocxLogo(doc);
 
-            center(doc, "École Nationale des Sciences Appliquées – Al Hoceima", 14, true);
-            center(doc, "Département Mathématiques et Informatique", 12, false);
-            center(doc, "Affectation des encadrants de Projet de Fin d'Etude", 11, false);
-            center(doc, "Année Universitaire 2025/2026", 10, false);
-            doc.createParagraph(); 
+            entities.AppSettings brand = services.AppSettingsService.getInstance().get();
+            String inst    = nullToEmpty(brand.getInstitutionName());
+            String subt    = nullToEmpty(brand.getInstitutionSubtitle());
+            String docTitle = brand.getDocumentTitle() != null && !brand.getDocumentTitle().isEmpty()
+                    ? brand.getDocumentTitle()
+                    : "Affectation des encadrants de Projet de Fin d'Etudes";
+            String year    = nullToEmpty(brand.getAcademicYear());
 
-            XWPFTable legend = doc.createTable(1, 3);
-            setWidth(legend, 4000);
-            setLegendCellDocx(legend.getRow(0).getCell(0), "Filière ID",   C_ID_DOCX_LIGHT);
-            setLegendCellDocx(legend.getRow(0).getCell(1), "Filière GI",   C_GI_DOCX_LIGHT);
-            setLegendCellDocx(legend.getRow(0).getCell(2), "Filière TDIA", C_TDIA_DOCX_LIGHT);
+            if (!inst.isEmpty()) center(doc, inst, 14, true);
+            if (!subt.isEmpty()) center(doc, subt, 12, false);
+            center(doc, docTitle, 11, false);
+            if (!year.isEmpty()) center(doc, "Annee Universitaire " + year, 10, false);
             doc.createParagraph();
+
+            // Build the legend dynamically from the filieres present in the affectations.
+            java.util.LinkedHashSet<String> filieresPresent = new java.util.LinkedHashSet<>();
+            for (Affectation a : affectations) {
+                if (a.getEtudiant() != null && a.getEtudiant().getFiliere() != null) {
+                    filieresPresent.add(a.getEtudiant().getFiliere());
+                }
+            }
+            if (!filieresPresent.isEmpty()) {
+                XWPFTable legend = doc.createTable(1, filieresPresent.size());
+                setWidth(legend, 4000);
+                int idx = 0;
+                for (String fil : filieresPresent) {
+                    setLegendCellDocx(legend.getRow(0).getCell(idx++),
+                            "Filiere " + fil, filiereColorDocxAffectation(fil));
+                }
+                doc.createParagraph();
+            }
 
             Map<Professeur, List<Etudiant>> map = new LinkedHashMap<>();
             affectations.sort(Comparator.comparing((Affectation a) -> a.getEncadrant().getNom()));
@@ -1061,17 +1155,12 @@ public class FrontController extends HttpServlet {
 
     
     private String filiereColorDocx(String filiere) {
-        if ("GI".equals(filiere))   return C_GI_DOCX;
-        if ("ID".equals(filiere))   return C_ID_DOCX;
-        if ("TDIA".equals(filiere)) return C_TDIA_DOCX;
-        return C_EMPTY_DOCX;
+        if (filiere == null || filiere.isEmpty()) return C_EMPTY_DOCX;
+        return util.FiliereColors.hex(filiere);
     }
-    
+
     private String filiereColorDocxAffectation(String filiere) {
-        if ("GI".equals(filiere))   return C_GI_DOCX_LIGHT;
-        if ("ID".equals(filiere))   return C_ID_DOCX_LIGHT;
-        if ("TDIA".equals(filiere)) return C_TDIA_DOCX_LIGHT;
-        return C_EMPTY_DOCX;
+        return filiereColorDocx(filiere);
     }
 
 
@@ -1170,19 +1259,10 @@ public class FrontController extends HttpServlet {
 
         List<entities.Salle> salles = service.getAllSalles();
         req.setAttribute("salles", salles);
-        
-        java.io.File historyDir = new java.io.File(getHistoryFolder());
-        List<String> historyFiles = new ArrayList<>();
-        if (historyDir.exists() && historyDir.isDirectory()) {
-            java.io.File[] files = historyDir.listFiles();
-            if (files != null) {
-                for (java.io.File f : files) {
-                    if (f.isFile() && f.getName().startsWith("Planning_")) {
-                        historyFiles.add(f.getName());
-                    }
-                }
-            }
-        }
+
+        List<String> historyFiles = util.HistoryStorage.getInstance().listFilesWithPrefix("Planning_");
+        // listFilesWithPrefix already returns files in reverse order, but
+        // sort defensively in case the backend returned an unsorted list.
         Collections.sort(historyFiles, Collections.reverseOrder());
         req.setAttribute("historyFiles", historyFiles);
 
@@ -1214,28 +1294,23 @@ public class FrontController extends HttpServlet {
         }
     }
     
-    private String getHistoryFolder() {
-        return System.getProperty("user.home") + java.io.File.separator + "plannings_history";
-    }
-
     private void doDownloadHistory(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
         String filename = req.getParameter("file");
-        if (filename == null || filename.contains("..") || (!filename.startsWith("Planning_") && !filename.startsWith("Affectation_"))) {
+        if (filename == null || filename.contains("..") || filename.contains("/") || filename.contains("\\")
+                || (!filename.startsWith("Planning_") && !filename.startsWith("Affectation_"))) {
             resp.sendError(HttpServletResponse.SC_BAD_REQUEST);
             return;
         }
-        java.io.File file = new java.io.File(getHistoryFolder(), filename);
-        if (!file.exists()) {
+        util.HistoryStorage storage = util.HistoryStorage.getInstance();
+        if (!storage.exists(filename)) {
             resp.sendError(HttpServletResponse.SC_NOT_FOUND);
             return;
         }
-        if (filename.endsWith(".pdf")) {
-            resp.setContentType("application/pdf");
-        } else if (filename.endsWith(".docx")) {
-            resp.setContentType("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
-        }
+        resp.setContentType(util.HistoryStorage.guessContentType(filename));
         resp.setHeader("Content-Disposition", "attachment; filename=\"" + filename + "\"");
-        java.nio.file.Files.copy(file.toPath(), resp.getOutputStream());
+        try (java.io.InputStream is = storage.openInputStream(filename)) {
+            is.transferTo(resp.getOutputStream());
+        }
     }
 
     
@@ -1315,23 +1390,24 @@ public class FrontController extends HttpServlet {
 
         req.setAttribute("hasAffectations", true);
         req.setAttribute("planningDone", true);
-        
-        
-        java.io.File historyDir = new java.io.File(getHistoryFolder());
-        if (!historyDir.exists()) historyDir.mkdirs();
-        
+
         String timestamp = new java.text.SimpleDateFormat("yyyy-MM-dd_HH-mm-ss").format(new java.util.Date());
-        String pdfName = "Planning_" + timestamp + ".pdf";
+        String pdfName  = "Planning_" + timestamp + ".pdf";
         String docxName = "Planning_" + timestamp + ".docx";
-        
-        try (java.io.FileOutputStream pdfOut = new java.io.FileOutputStream(new java.io.File(historyDir, pdfName));
-             java.io.FileOutputStream docxOut = new java.io.FileOutputStream(new java.io.File(historyDir, docxName))) {
-            generatePdfToStream(pdfOut);
-            generateDocxToStream(docxOut);
+
+        util.HistoryStorage storage = util.HistoryStorage.getInstance();
+        try {
+            ByteArrayOutputStream pdfBuf = new ByteArrayOutputStream();
+            generatePdfToStream(pdfBuf);
+            storage.write(pdfName, pdfBuf.toByteArray(), util.HistoryStorage.guessContentType(pdfName));
+
+            ByteArrayOutputStream docxBuf = new ByteArrayOutputStream();
+            generateDocxToStream(docxBuf);
+            storage.write(docxName, docxBuf.toByteArray(), util.HistoryStorage.guessContentType(docxName));
         } catch (Exception e) {
             e.printStackTrace();
         }
-        
+
         resp.sendRedirect("planning.do");
     }
 
@@ -1366,19 +1442,8 @@ public class FrontController extends HttpServlet {
         PdfFont normal = PdfFontFactory.createFont(StandardFonts.HELVETICA);
 
         addPdfLogo(doc);
-        doc.add(new Paragraph("École Nationale des Sciences Appliquées – Al Hoceima")
-                .setFont(bold).setFontSize(12)
-                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
-        doc.add(new Paragraph("Département Mathématiques et Informatique")
-                .setFont(normal).setFontSize(10)
-                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
-        doc.add(new Paragraph("Jury + Sujet - Visualisation de l'affectation intelligente")
-                .setFont(bold).setFontSize(11)
-                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
-        doc.add(new Paragraph("Année Universitaire 2025/2026")
-                .setFont(normal).setFontSize(9)
-                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
-                .setMarginBottom(8));
+        addBrandingHeaderPdf(doc, bold, normal,
+                "Jury + Sujet - Visualisation de l'affectation intelligente", 12, 10, 11, 9, 8);
 
         float[] cols = {3f, 13f, 13f, 13f, 16f, 28f, 18f};
         Table table = new Table(UnitValue.createPercentArray(cols)).useAllAvailableWidth();
@@ -1443,19 +1508,8 @@ public class FrontController extends HttpServlet {
 
         // Header
         addPdfLogo(doc);
-        doc.add(new Paragraph("École Nationale des Sciences Appliquées – Al Hoceima")
-                .setFont(bold).setFontSize(12)
-                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
-        doc.add(new Paragraph("Département Mathématiques et Informatique")
-                .setFont(normal).setFontSize(10)
-                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
-        doc.add(new Paragraph("Planning des soutenances des Projets de Fin d'Etude")
-                .setFont(bold).setFontSize(10)
-                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER));
-        doc.add(new Paragraph("(Première Session) — Année Universitaire 2025/2026")
-                .setFont(normal).setFontSize(9)
-                .setTextAlignment(com.itextpdf.layout.properties.TextAlignment.CENTER)
-                .setMarginBottom(8));
+        addBrandingHeaderPdf(doc, bold, normal,
+                "Planning des soutenances des Projets de Fin d'Etudes", 12, 10, 10, 9, 8);
 
         //ID | Encadrant | Jury1 | Jury2 | Date | Heure | Salle | Nom | Prénom | Filière
         float[] cols = {3f, 12f, 12f, 12f, 8f, 6f, 6f, 9f, 9f, 5f};
@@ -1581,10 +1635,7 @@ public class FrontController extends HttpServlet {
             pgSz.setOrient(STPageOrientation.LANDSCAPE);
 
             addDocxLogo(doc);
-            center(doc, "École Nationale des Sciences Appliquées – Al Hoceima", 14, true);
-            center(doc, "Département Mathématiques et Informatique", 12, false);
-            center(doc, "Planning des soutenances des Projets de Fin d'Etude", 11, true);
-            center(doc, "(Première Session) — Année Universitaire 2025/2026", 10, false);
+            addBrandingHeaderDocx(doc, "Planning des soutenances des Projets de Fin d'Etudes", 14, 12, 11, 10);
             doc.createParagraph();
 
             // 10 columns
@@ -1847,7 +1898,8 @@ public class FrontController extends HttpServlet {
 
         Map<String, String> values = new HashMap<>();
         String filiere = e != null ? safe(e.getFiliere()) : "";
-        values.put("annee_univ", "2025/2026");
+        entities.AppSettings _brand = services.AppSettingsService.getInstance().get();
+        values.put("annee_univ", _brand.getAcademicYear() == null ? "" : _brand.getAcademicYear());
         values.put("nom_etudiant", studentNames(group));
         values.putAll(pvFiliereBoxes(filiere));
         values.put("intitule_rapport", e != null ? safe(e.getSujet_stage()) : "");
@@ -1975,6 +2027,10 @@ public class FrontController extends HttpServlet {
 
     private Map<String, String> pvFiliereBoxes(String filiere) {
         Map<String, String> boxes = new HashMap<>();
+
+        // Legacy boxes preserved for backward compatibility with the bundled
+        // template_pv.docx. They will only be populated if the filière name
+        // matches the historical naming.
         boxes.put("box_id", "\u2610");
         boxes.put("box_gi", "\u2610");
         boxes.put("box_tdia", "\u2610");
@@ -1987,6 +2043,16 @@ public class FrontController extends HttpServlet {
         } else if (normalized.contains("ID") || normalized.contains("DONN")) {
             boxes.put("box_id", "\u2612");
         }
+
+        // Generic placeholders so any establishment can define its own
+        // template_pv.docx with placeholders like ${box_<FILIERE>} and
+        // ${filiere_label} without us shipping legacy code.
+        if (!normalized.isEmpty()) {
+            String safeKey = "box_" + normalized.toLowerCase(Locale.ROOT)
+                    .replaceAll("[^a-z0-9]+", "_");
+            boxes.put(safeKey, "\u2612");
+        }
+        boxes.put("filiere_label", normalized);
         return boxes;
     }
 
@@ -2123,7 +2189,9 @@ public class FrontController extends HttpServlet {
 
     private void doTemplateData(HttpServletRequest req, HttpServletResponse resp) throws IOException {
         try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
-            String[] filieres = {"GI", "ID", "TDIA"};
+            // Example sheet names; the user can rename / add as many sheets
+            // as they have filières — the sheet name IS the filière code.
+            String[] filieres = {"FILIERE_1", "FILIERE_2"};
             for (String filiere : filieres) {
                 org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet(filiere);
                 org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
@@ -2286,6 +2354,187 @@ public class FrontController extends HttpServlet {
         String v = req.getParameter(name);
         if (v == null || v.trim().isEmpty()) return defaultValue;
         try { return Integer.parseInt(v.trim()); } catch (NumberFormatException e) { return defaultValue; }
+    }
+
+    // --------------------------------------------------------------------------
+    //  SETTINGS (branding, storage, NLP)
+    // --------------------------------------------------------------------------
+
+    private void doSettings(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        entities.AppSettings settings = services.AppSettingsService.getInstance().get();
+        req.setAttribute("appSettings", settings);
+
+        util.HistoryStorage storage = util.HistoryStorage.getInstance();
+        boolean ok = false;
+        String status;
+        try {
+            ok = storage.testConnection();
+            status = storage.describeStatus() + (ok ? " — accessible" : " — non accessible");
+        } catch (Exception e) {
+            status = storage.describeStatus() + " — erreur: " + e.getMessage();
+        }
+        req.setAttribute("storageStatus", status);
+        req.setAttribute("storageStatusOk", ok);
+
+        passFlashFromSession(req, "settingsFlash", "settingsFlashIsError");
+        req.getRequestDispatcher("settings.jsp").forward(req, resp);
+    }
+
+    private void doSaveBranding(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        entities.AppSettings settings = services.AppSettingsService.getInstance().get();
+        settings.setInstitutionName(trimToNull(req.getParameter("institutionName")));
+        settings.setInstitutionSubtitle(trimToNull(req.getParameter("institutionSubtitle")));
+        settings.setAcademicYear(trimToNull(req.getParameter("academicYear")));
+        settings.setDocumentTitle(trimToNull(req.getParameter("documentTitle")));
+
+        if ("true".equals(req.getParameter("removeLogo"))) {
+            settings.setLogoBytes(null);
+            settings.setLogoMimeType(null);
+        }
+
+        try {
+            Part logoPart = req.getPart("logo");
+            if (logoPart != null && logoPart.getSize() > 0) {
+                String mime = logoPart.getContentType();
+                if (mime == null || (!mime.startsWith("image/"))) {
+                    flash(req, "settingsFlash", "Le logo doit etre une image (PNG ou JPEG).", true);
+                    resp.sendRedirect("settings.do");
+                    return;
+                }
+                try (InputStream is = logoPart.getInputStream()) {
+                    settings.setLogoBytes(is.readAllBytes());
+                    settings.setLogoMimeType(mime);
+                }
+            }
+        } catch (Exception e) {
+            flash(req, "settingsFlash", "Erreur lors de la lecture du logo: " + e.getMessage(), true);
+            resp.sendRedirect("settings.do");
+            return;
+        }
+
+        services.AppSettingsService.getInstance().update(settings);
+        flash(req, "settingsFlash", "Identite de l'etablissement enregistree.", false);
+        resp.sendRedirect("settings.do");
+    }
+
+    private void doSaveStorage(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        entities.AppSettings settings = services.AppSettingsService.getInstance().get();
+        String mode = req.getParameter("storageMode");
+        if ("S3".equalsIgnoreCase(mode)) {
+            settings.setStorageMode(entities.AppSettings.StorageMode.S3);
+        } else {
+            settings.setStorageMode(entities.AppSettings.StorageMode.LOCAL);
+        }
+
+        settings.setLocalStoragePath(trimToNull(req.getParameter("localStoragePath")));
+        settings.setS3Endpoint(trimToNull(req.getParameter("s3Endpoint")));
+        settings.setS3Region(trimToNull(req.getParameter("s3Region")));
+        settings.setS3Bucket(trimToNull(req.getParameter("s3Bucket")));
+        settings.setS3AccessKey(trimToNull(req.getParameter("s3AccessKey")));
+
+        // Keep existing secret if user submits empty string
+        String secretInput = req.getParameter("s3SecretKey");
+        if (secretInput != null && !secretInput.isEmpty()) {
+            settings.setS3SecretKey(secretInput);
+        }
+
+        settings.setS3Prefix(trimToNull(req.getParameter("s3Prefix")));
+        settings.setS3PathStyleAccess("true".equals(req.getParameter("s3PathStyleAccess")));
+
+        services.AppSettingsService.getInstance().update(settings);
+
+        boolean ok = util.HistoryStorage.getInstance().testConnection();
+        if (ok) {
+            flash(req, "settingsFlash", "Stockage enregistre. Backend: "
+                    + util.HistoryStorage.getInstance().describeStatus(), false);
+        } else {
+            flash(req, "settingsFlash", "Stockage enregistre, mais la connexion a echoue. Verifiez la configuration.", true);
+        }
+        resp.sendRedirect("settings.do");
+    }
+
+    private void doTestStorage(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        // Save first then test, so the user can iterate quickly
+        doSaveStorage(req, resp);
+    }
+
+    private void doSaveNlp(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
+        entities.AppSettings settings = services.AppSettingsService.getInstance().get();
+        settings.setNlpBaseUrl(trimToNull(req.getParameter("nlpBaseUrl")));
+        settings.setNlpModel(trimToNull(req.getParameter("nlpModel")));
+
+        String keyInput = req.getParameter("nlpApiKey");
+        if (keyInput != null) {
+            settings.setNlpApiKey(keyInput.trim().isEmpty() ? null : keyInput.trim());
+        }
+
+        boolean wantEnabled = "true".equals(req.getParameter("nlpEnabled"));
+        boolean canEnable = wantEnabled
+                && settings.getNlpApiKey() != null
+                && !settings.getNlpApiKey().isEmpty();
+        settings.setNlpEnabled(canEnable);
+
+        services.AppSettingsService.getInstance().update(settings);
+
+        if (wantEnabled && !canEnable) {
+            flash(req, "settingsFlash", "Le service NLP necessite une cle API. Il reste desactive.", true);
+        } else {
+            flash(req, "settingsFlash", "Configuration NLP enregistree (" + (canEnable ? "active" : "desactive") + ").", false);
+        }
+        resp.sendRedirect("settings.do");
+    }
+
+    private void doLogo(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        entities.AppSettings settings = services.AppSettingsService.getInstance().get();
+        if (settings == null || settings.getLogoBytes() == null || settings.getLogoBytes().length == 0) {
+            // Fall back to bundled placeholder if any, otherwise 404
+            byte[] fallback = readBundledLogoBytes();
+            if (fallback != null) {
+                resp.setContentType("image/png");
+                resp.setHeader("Cache-Control", "public, max-age=300");
+                resp.getOutputStream().write(fallback);
+                return;
+            }
+            resp.sendError(HttpServletResponse.SC_NOT_FOUND);
+            return;
+        }
+        String mime = settings.getLogoMimeType();
+        resp.setContentType(mime == null || mime.isEmpty() ? "image/png" : mime);
+        resp.setHeader("Cache-Control", "public, max-age=300");
+        resp.getOutputStream().write(settings.getLogoBytes());
+    }
+
+    private void flash(HttpServletRequest req, String key, String message, boolean isError) {
+        req.getSession().setAttribute(key, message);
+        if (key.endsWith("Flash")) {
+            req.getSession().setAttribute(key + "IsError", isError);
+        }
+    }
+
+    private String trimToNull(String v) {
+        if (v == null) return null;
+        String t = v.trim();
+        return t.isEmpty() ? null : t;
+    }
+
+    private String nullToEmpty(String v) {
+        return v == null ? "" : v;
+    }
+
+    private byte[] readBundledLogoBytes() {
+        // Optional fallback used only when the user has not uploaded a logo yet.
+        try {
+            if (getServletContext() != null) {
+                try (InputStream is = getServletContext().getResourceAsStream("/images/logo.png")) {
+                    if (is != null) return is.readAllBytes();
+                }
+                try (InputStream is = getServletContext().getResourceAsStream("/assets/t1.png")) {
+                    if (is != null) return is.readAllBytes();
+                }
+            }
+        } catch (IOException ignored) {
+        }
+        return null;
     }
 
 }

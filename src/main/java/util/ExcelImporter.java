@@ -232,7 +232,7 @@ public class ExcelImporter {
             Salle s = new Salle();
             s.setNum_salle(num.trim());
             String block = getCellValue(row, 1);
-            s.setBlock(block == null || block.isEmpty() ? "Bloc Principal" : block);
+            s.setBlock(block == null ? "" : block);
             String status = getCellValue(row, 2);
             s.setStatus(status == null || status.isEmpty() ? "Libre" : status);
             list.add(s);
@@ -290,18 +290,18 @@ public class ExcelImporter {
     // ─── Filiere normalization ──────────────────────────────────────────────
 
     /**
-     * Normalize a sheet name to a filière code, matching the legacy logic
-     * used in the controller.
+     * Normalize a sheet name to a filière code. The sheet name is preserved
+     * as-is (uppercased and stripped of special characters) so the application
+     * works with any establishment's filière naming.
      */
     public static String normalizeFiliere(String rawName) {
         if (rawName == null) return "INCONNUE";
         String name = rawName.trim();
-        String lower = name.toLowerCase(Locale.ROOT);
-        if (lower.equals("gi") || lower.contains("genie info") || lower.contains("génie info")) return "GI";
-        if (lower.equals("id") || lower.contains("ingenierie") || lower.contains("ingénierie")) return "ID";
-        if (lower.contains("tdia") || lower.contains("intelligence artificielle")
-                || lower.contains("transformation digitale")) return "TDIA";
-        return name.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]", "_");
+        if (name.isEmpty()) return "INCONNUE";
+        String upper = name.toUpperCase(Locale.ROOT).replaceAll("[^A-Z0-9]+", "_");
+        // Trim leading / trailing underscores left over by the substitution.
+        upper = upper.replaceAll("^_+", "").replaceAll("_+$", "");
+        return upper.isEmpty() ? "INCONNUE" : upper;
     }
 
     // ─── Legacy single-sheet APIs (kept for backward compatibility) ─────────

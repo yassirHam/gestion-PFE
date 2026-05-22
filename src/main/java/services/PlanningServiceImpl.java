@@ -581,7 +581,7 @@ public class PlanningServiceImpl implements PlanningService {
             for (String name : cfg.getDefaultRooms()) {
                 Salle s = new Salle();
                 s.setNum_salle(name);
-                s.setBlock("Bloc Principal");
+                s.setBlock("");
                 s.setStatus("Libre");
                 defaults.add(s);
             }

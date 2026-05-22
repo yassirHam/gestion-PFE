@@ -1,5 +1,13 @@
 <%@ page language="java" contentType="text/html; charset=UTF-8" pageEncoding="UTF-8"%>
 <%@ taglib uri="http://java.sun.com/jsp/jstl/core" prefix="c" %>
+<%
+    // Make sure branding is available even when index.jsp is opened directly (no servlet hit)
+    if (request.getAttribute("appSettings") == null) {
+        try {
+            request.setAttribute("appSettings", services.AppSettingsService.getInstance().get());
+        } catch (Exception ignored) {}
+    }
+%>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
@@ -43,8 +51,15 @@
 <nav class="navbar navbar-expand-lg navbar-dark bg-dark shadow-sm mb-4">
     <div class="container-fluid px-3 px-lg-4">
         <a class="navbar-brand d-flex align-items-center" href="index.jsp">
-            <img src="images/logo.png" alt="Logo" style="height: 38px; margin-right: 12px; object-fit: contain;">
-            Gestion PFE
+            <c:choose>
+                <c:when test="${not empty appSettings and appSettings.hasLogo()}">
+                    <img src="logo.do" alt="Logo" style="height: 38px; margin-right: 12px; object-fit: contain;">
+                </c:when>
+                <c:otherwise>
+                    <i class="fa-solid fa-graduation-cap me-2 text-primary" style="font-size: 28px;"></i>
+                </c:otherwise>
+            </c:choose>
+            <c:out value="${empty appSettings.institutionName ? 'Gestion PFE' : appSettings.institutionName}"/>
         </a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
             <span class="navbar-toggler-icon"></span>
@@ -75,7 +90,12 @@
 
     <div class="text-center mb-4 mb-md-5">
         <h1 class="fw-bold mb-2">Gestion des PFE</h1>
-        <p class="text-muted mb-0">Affectation, planning, PVs et tableau de bord — ENSAH</p>
+        <p class="text-muted mb-0">
+            Affectation, planning, PVs et tableau de bord
+            <c:if test="${not empty appSettings.institutionName}">
+                &mdash; <c:out value="${appSettings.institutionName}"/>
+            </c:if>
+        </p>
     </div>
 
     <div class="row g-3 g-md-4 justify-content-center">
@@ -123,6 +143,18 @@
                         <div class="icon text-info"><i class="fa-solid fa-chart-pie"></i></div>
                         <h5 class="fw-bold mb-1">Dashboard</h5>
                         <p class="small text-muted mb-0">Statistiques et vérifications.</p>
+                    </div>
+                </div>
+            </a>
+        </div>
+
+        <div class="col-12 col-sm-6 col-lg-3">
+            <a href="settings.do" class="text-decoration-none">
+                <div class="home-card text-center bg-white">
+                    <div class="card-body">
+                        <div class="icon text-secondary"><i class="fa-solid fa-gear"></i></div>
+                        <h5 class="fw-bold mb-1">Paramètres</h5>
+                        <p class="small text-muted mb-0">Identité, stockage de l'historique, NLP optionnel.</p>
                     </div>
                 </div>
             </a>

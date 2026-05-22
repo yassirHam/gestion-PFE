@@ -16,17 +16,23 @@ public final class ServiceFactory {
     public static PfeService createPfeService() {
         PlanningService planningService = createPlanningService();
         VerificationService verificationService = createVerificationService();
+        RecommendationService recommendationService = createRecommendationService();
         return new PfeServiceImpl(new AffectationDAOImpl(), new EtudiantDAOImpl(), new ProfesseurDAOImpl(),
-                new FichierListeDAOImpl(), new SalleDAOImpl(), planningService, verificationService);
+                new FichierListeDAOImpl(), new SalleDAOImpl(),
+                planningService, verificationService, recommendationService);
     }
 
     public static PlanningService createPlanningService() {
-        return new PlanningServiceImpl( new AffectationDAOImpl(), new ProfesseurDAOImpl(), new SalleDAOImpl(),
-                new JuryDAOImpl(), new SoutenanceDAOImpl(), new NlpServiceImpl(), PlanningConfig.defaults(),
+        return new PlanningServiceImpl(new AffectationDAOImpl(), new ProfesseurDAOImpl(), new SalleDAOImpl(),
+                new JuryDAOImpl(), new SoutenanceDAOImpl(), new NlpServiceImpl(),
                 new DefaultJurySelectionStrategy());
     }
 
     public static VerificationService createVerificationService() {
-        return new VerificationServiceImpl( new AffectationDAOImpl(), new ProfesseurDAOImpl(), new SoutenanceDAOImpl());
+        return new VerificationServiceImpl(new AffectationDAOImpl(), new ProfesseurDAOImpl(), new SoutenanceDAOImpl());
+    }
+
+    public static RecommendationService createRecommendationService() {
+        return new RecommendationServiceImpl();
     }
 }

@@ -20,6 +20,14 @@ public class SalleDAOImpl implements SalleDAO {
     }
 
     @Override
+    public Salle findById(Long id) {
+        if (id == null) return null;
+        try (Session session = sf.openSession()) {
+            return session.get(Salle.class, id);
+        }
+    }
+
+    @Override
     public void save(Salle salle) {
         Transaction tx = null;
         try (Session session = sf.openSession()) {
@@ -44,6 +52,40 @@ public class SalleDAOImpl implements SalleDAO {
         } catch (Exception e) {
             if (tx != null) tx.rollback();
             e.printStackTrace();
+        }
+    }
+
+    @Override
+    public boolean deleteById(Long id) {
+        if (id == null) return false;
+        if (isUsedInPlanning(id)) return false;
+        Transaction tx = null;
+        try (Session session = sf.openSession()) {
+            tx = session.beginTransaction();
+            int affected = session.createMutationQuery("delete from Salle s where s.id_salle = :id")
+                    .setParameter("id", id)
+                    .executeUpdate();
+            tx.commit();
+            return affected > 0;
+        } catch (Exception e) {
+            if (tx != null) tx.rollback();
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    @Override
+    public boolean isUsedInPlanning(Long id) {
+        if (id == null) return false;
+        try (Session session = sf.openSession()) {
+            Long count = session.createQuery(
+                    "select count(s) from Soutenance s where s.salle.id_salle = :id", Long.class)
+                    .setParameter("id", id)
+                    .uniqueResult();
+            return count != null && count > 0;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
         }
     }
 

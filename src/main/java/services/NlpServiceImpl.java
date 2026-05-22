@@ -1,4 +1,4 @@
-﻿package services;
+package services;
 
 import dev.langchain4j.model.openai.OpenAiChatModel;
 import dev.langchain4j.model.chat.ChatLanguageModel;

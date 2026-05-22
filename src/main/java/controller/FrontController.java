@@ -212,11 +212,8 @@ public class FrontController extends HttpServlet {
             case "/affectation.do":
                 doAffectation(req, resp);
                 break;
-            case "/uploadEtudiants.do":
-                doUploadEtudiants(req, resp);
-                break;
-            case "/uploadProfs.do":
-                doUploadProfs(req, resp);
+            case "/uploadData.do":
+                doUploadData(req, resp);
                 break;
             case "/lancerAffectation.do":
                 doLancerAffectation(req, resp);
@@ -242,6 +239,18 @@ public class FrontController extends HttpServlet {
             case "/addSalle.do":
                 doAddSalle(req, resp);
                 break;
+            case "/addSalleBulk.do":
+                doAddSalleBulk(req, resp);
+                break;
+            case "/deleteSalle.do":
+                doDeleteSalle(req, resp);
+                break;
+            case "/deleteAllSalles.do":
+                doDeleteAllSalles(req, resp);
+                break;
+            case "/recommendations.do":
+                doRecommendations(req, resp);
+                break;
             case "/downloadHistory.do":
                 doDownloadHistory(req, resp);
                 break;
@@ -265,6 +274,9 @@ public class FrontController extends HttpServlet {
                 break;
             case "/downloadPvZip.do":
                 doDownloadPvZip(req, resp);
+                break;
+            case "/templateData.do":
+                doTemplateData(req, resp);
                 break;
             case "/templateEtudiants.do":
                 doTemplateEtudiants(req, resp);
@@ -1083,7 +1095,32 @@ public class FrontController extends HttpServlet {
         Collections.sort(historyFiles, Collections.reverseOrder());
         req.setAttribute("historyFiles", historyFiles);
 
+        // Expose the planning configuration (last used or defaults) to the JSP
+        services.PlanningConfig lastConfig = (services.PlanningConfig)
+                req.getSession().getAttribute("lastPlanningConfig");
+        if (lastConfig == null) lastConfig = services.PlanningConfig.defaults();
+        req.setAttribute("planningConfig", lastConfig);
+        req.setAttribute("constraints", lastConfig.getConstraints().asList());
+        req.setAttribute("totalProjects", service.getTotalProjetsAffectes(null));
+        req.setAttribute("totalProfs", service.getTotalProfesseurs());
+
+        // Pull any flash messages set by salle CRUD or planning failure
+        passFlashFromSession(req,
+                "salleFlash", "salleFlashIsError",
+                "planningDebug", "planningHardViolations", "planningSoftViolations",
+                "planningUnscheduled", "planningSuggestions", "planningFailed");
+
         req.getRequestDispatcher("planning.jsp").forward(req, resp);
+    }
+
+    private void passFlashFromSession(HttpServletRequest req, String... attrs) {
+        for (String attr : attrs) {
+            Object v = req.getSession().getAttribute(attr);
+            if (v != null) {
+                req.setAttribute(attr, v);
+                req.getSession().removeAttribute(attr);
+            }
+        }
     }
     
     private String getHistoryFolder() {
@@ -1142,14 +1179,29 @@ public class FrontController extends HttpServlet {
 
         List<String> debug = new ArrayList<>();
 
-        
         @SuppressWarnings("unchecked")
         List<String> lastFilieres = (List<String>) req.getSession().getAttribute("lastFilieres");
 
-        String startDate = req.getParameter("startDate");
+        services.PlanningConfig config = buildPlanningConfigFromRequest(req);
+        services.PlanningResult planningResult = service.genererPlanning(lastFilieres, selectedSalles, config);
+        debug.addAll(planningResult.getDebugLog());
 
-        service.genererPlanning(lastFilieres, debug, selectedSalles, startDate);
+        // Persist the constraints used so the planning page can re-display them
+        req.getSession().setAttribute("lastPlanningConfig", config);
 
+        if (!planningResult.isSuccess()) {
+            // Surface violations + suggestions to the user; do NOT save the planning
+            req.getSession().setAttribute("planningDebug", debug);
+            req.getSession().setAttribute("planningHardViolations", planningResult.getHardViolations());
+            req.getSession().setAttribute("planningSoftViolations", planningResult.getSoftViolations());
+            req.getSession().setAttribute("planningUnscheduled", planningResult.getUnscheduledProjects());
+            req.getSession().setAttribute("planningSuggestions", planningResult.getSuggestions());
+            req.getSession().setAttribute("planningFailed", true);
+            resp.sendRedirect("planning.do");
+            return;
+        }
+
+        // Success path: refresh data, build legends, persist exports
         List<Soutenance> soutenances = service.getAllSoutenances();
         Map<Long, String> colors = service.getProfessorColors();
         req.setAttribute("soutenances", soutenances);
@@ -1162,6 +1214,13 @@ public class FrontController extends HttpServlet {
             profLegend.put(s.getJury().getRapporteur2().getNom() + " " + s.getJury().getRapporteur2().getPrenom(), colors.get(s.getJury().getRapporteur2().getIdp()));
         }
         req.setAttribute("profLegend", profLegend);
+
+        req.getSession().setAttribute("planningDebug", debug);
+        req.getSession().setAttribute("planningSoftViolations", planningResult.getSoftViolations());
+        req.getSession().removeAttribute("planningHardViolations");
+        req.getSession().removeAttribute("planningUnscheduled");
+        req.getSession().removeAttribute("planningSuggestions");
+        req.getSession().removeAttribute("planningFailed");
 
         req.setAttribute("hasAffectations", true);
         req.setAttribute("planningDone", true);
@@ -1932,6 +1991,210 @@ public class FrontController extends HttpServlet {
     private String profName(Professeur professeur) {
         if (professeur == null) return "-";
         return professeur.getNom() + " " + professeur.getPrenom();
+    }
+
+    // --------------------------------------------------------------------------
+    //  UNIFIED EXCEL IMPORT (single workbook, multiple sheets)
+    // --------------------------------------------------------------------------
+
+    private void doUploadData(HttpServletRequest req, HttpServletResponse resp)
+            throws ServletException, IOException {
+        List<String> debug = new ArrayList<>();
+        Part file = req.getPart("file");
+        if (file == null || file.getSize() == 0) {
+            debug.add("Aucun fichier reçu.");
+            req.setAttribute("debug", debug);
+            req.setAttribute("fichiers", service.getAllFichiers());
+            req.getRequestDispatcher("affectation.jsp").forward(req, resp);
+            return;
+        }
+
+        String fileName = file.getSubmittedFileName();
+        try {
+            util.ExcelImporter.ImportResult result = service.importWorkbook(file.getInputStream(), fileName);
+            debug.add("Fichier importé : " + fileName);
+            debug.add("Étudiants : " + result.getStudentCount()
+                    + " sur " + result.getStudentsByFiliere().size() + " filière(s) ("
+                    + String.join(", ", result.getStudentsByFiliere().keySet()) + ")");
+            debug.add("Professeurs : " + result.getProfesseurs().size());
+            debug.add("Salles : " + result.getSalles().size());
+            for (String w : result.getWarnings()) {
+                debug.add(w);
+            }
+        } catch (Exception e) {
+            debug.add("Erreur lors de l'import : " + e.getMessage());
+            e.printStackTrace();
+        }
+
+        req.getSession().setAttribute("affectationDebug", debug);
+        resp.sendRedirect("affectation.do");
+    }
+
+    private void doTemplateData(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        try (org.apache.poi.xssf.usermodel.XSSFWorkbook wb = new org.apache.poi.xssf.usermodel.XSSFWorkbook()) {
+            String[] filieres = {"GI", "ID", "TDIA"};
+            for (String filiere : filieres) {
+                org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet(filiere);
+                org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
+                String[] cols = {"CNE", "NOM", "PRÉNOM", "EMAIL", "CNE BINÔME (Optionnel)", "SUJET PFE"};
+                for (int i = 0; i < cols.length; i++) {
+                    header.createCell(i).setCellValue(cols[i]);
+                }
+            }
+
+            org.apache.poi.ss.usermodel.Sheet profSheet = wb.createSheet("Professeurs");
+            org.apache.poi.ss.usermodel.Row profHeader = profSheet.createRow(0);
+            String[] profCols = {"NOM", "PRÉNOM", "DISCIPLINE", "SPÉCIALITÉ"};
+            for (int i = 0; i < profCols.length; i++) {
+                profHeader.createCell(i).setCellValue(profCols[i]);
+            }
+
+            org.apache.poi.ss.usermodel.Sheet salleSheet = wb.createSheet("Salles");
+            org.apache.poi.ss.usermodel.Row salleHeader = salleSheet.createRow(0);
+            String[] salleCols = {"NUM_SALLE", "BLOCK", "STATUS"};
+            for (int i = 0; i < salleCols.length; i++) {
+                salleHeader.createCell(i).setCellValue(salleCols[i]);
+            }
+
+            resp.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            resp.setHeader("Content-Disposition", "attachment; filename=modele_gestion_pfe.xlsx");
+            wb.write(resp.getOutputStream());
+        }
+    }
+
+    // --------------------------------------------------------------------------
+    //  SALLE MANAGEMENT (delete, bulk add, delete all)
+    // --------------------------------------------------------------------------
+
+    private void doAddSalleBulk(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        String names = req.getParameter("salleNames");
+        int added = service.addSalleBulk(names);
+        req.getSession().setAttribute("salleFlash",
+                added > 0 ? added + " salle(s) ajoutée(s)." : "Aucune nouvelle salle ajoutée.");
+        resp.sendRedirect("planning.do");
+    }
+
+    private void doDeleteSalle(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        String idStr = req.getParameter("id");
+        if (idStr == null || idStr.isEmpty()) {
+            resp.sendRedirect("planning.do");
+            return;
+        }
+        try {
+            Long id = Long.parseLong(idStr);
+            if (service.isSalleUsedInPlanning(id)) {
+                req.getSession().setAttribute("salleFlash",
+                        "Cette salle est utilisée par un planning existant. Supprimez le planning d'abord.");
+                req.getSession().setAttribute("salleFlashIsError", true);
+            } else if (service.deleteSalle(id)) {
+                req.getSession().setAttribute("salleFlash", "Salle supprimée.");
+            } else {
+                req.getSession().setAttribute("salleFlash", "Suppression impossible.");
+                req.getSession().setAttribute("salleFlashIsError", true);
+            }
+        } catch (NumberFormatException e) {
+            // ignore
+        }
+        resp.sendRedirect("planning.do");
+    }
+
+    private void doDeleteAllSalles(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        int removed = service.deleteAllSalles();
+        int remaining = service.getAllSalles().size();
+        StringBuilder msg = new StringBuilder();
+        msg.append(removed).append(" salle(s) supprimée(s).");
+        if (remaining > 0) {
+            msg.append(" ").append(remaining)
+                    .append(" salle(s) conservée(s) car utilisée(s) dans un planning.");
+            req.getSession().setAttribute("salleFlashIsError", true);
+        }
+        req.getSession().setAttribute("salleFlash", msg.toString());
+        resp.sendRedirect("planning.do");
+    }
+
+    // --------------------------------------------------------------------------
+    //  RECOMMENDATIONS (AJAX endpoint, returns JSON)
+    // --------------------------------------------------------------------------
+
+    private void doRecommendations(HttpServletRequest req, HttpServletResponse resp) throws IOException {
+        @SuppressWarnings("unchecked")
+        List<String> filieres = (List<String>) req.getSession().getAttribute("lastFilieres");
+        services.PlanningConfig config = buildPlanningConfigFromRequest(req);
+        int rooms = parseIntParam(req, "numberOfRooms", service.getAllSalles().size());
+        java.util.List<services.Recommendation> recs = service.generateRecommendations(filieres, rooms, config);
+
+        resp.setContentType("application/json; charset=UTF-8");
+        StringBuilder sb = new StringBuilder("{");
+        sb.append("\"slotsPerDay\":").append(config.getSlotsPerDay()).append(",");
+        sb.append("\"recommendations\":[");
+        for (int i = 0; i < recs.size(); i++) {
+            services.Recommendation r = recs.get(i);
+            if (i > 0) sb.append(",");
+            sb.append("{")
+                    .append("\"type\":\"").append(jsonEscape(r.getType().name())).append("\",")
+                    .append("\"bootstrap\":\"").append(jsonEscape(r.getBootstrapClass())).append("\",")
+                    .append("\"icon\":\"").append(jsonEscape(r.getIconClass())).append("\",")
+                    .append("\"title\":\"").append(jsonEscape(r.getTitle())).append("\",")
+                    .append("\"message\":\"").append(jsonEscape(r.getMessage())).append("\",")
+                    .append("\"suggestion\":\"").append(jsonEscape(r.getSuggestion())).append("\"")
+                    .append("}");
+        }
+        sb.append("]}");
+        resp.getWriter().write(sb.toString());
+    }
+
+    private static String jsonEscape(String value) {
+        if (value == null) return "";
+        StringBuilder out = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            switch (c) {
+                case '"': out.append("\\\""); break;
+                case '\\': out.append("\\\\"); break;
+                case '\n': out.append("\\n"); break;
+                case '\r': out.append("\\r"); break;
+                case '\t': out.append("\\t"); break;
+                default:
+                    if (c < 0x20) out.append(String.format("\\u%04x", (int) c));
+                    else out.append(c);
+            }
+        }
+        return out.toString();
+    }
+
+    // --------------------------------------------------------------------------
+    //  PLANNING CONFIG BUILDER (from request parameters)
+    // --------------------------------------------------------------------------
+
+    private services.PlanningConfig buildPlanningConfigFromRequest(HttpServletRequest req) {
+        services.PlanningConfig.Builder b = services.PlanningConfig.defaults().toBuilder();
+        b.numberOfDays(parseIntParam(req, "numberOfDays", 4));
+        b.startDate(req.getParameter("startDate"));
+        b.startHourMorning(parseIntParam(req, "startHourMorning", 9));
+        b.endHourMorning(parseIntParam(req, "endHourMorning", 12));
+        b.startHourAfternoon(parseIntParam(req, "startHourAfternoon", 14));
+        b.endHourAfternoon(parseIntParam(req, "endHourAfternoon", 18));
+        b.soutenanceDurationMinutes(parseIntParam(req, "soutenanceDurationMinutes", 60));
+        b.breakBetweenMinutes(parseIntParam(req, "breakBetweenMinutes", 0));
+
+        services.ConstraintSet constraints = services.ConstraintSet.defaults();
+        for (services.Constraint c : constraints.asList()) {
+            String value = req.getParameter("constraint_value_" + c.getId());
+            String priority = req.getParameter("constraint_priority_" + c.getId());
+            services.ConstraintPriority p = priority == null
+                    ? c.getPriority()
+                    : services.ConstraintPriority.fromString(priority);
+            constraints.update(c.getId(), value, p);
+        }
+        b.constraints(constraints);
+
+        return b.build();
+    }
+
+    private int parseIntParam(HttpServletRequest req, String name, int defaultValue) {
+        String v = req.getParameter(name);
+        if (v == null || v.trim().isEmpty()) return defaultValue;
+        try { return Integer.parseInt(v.trim()); } catch (NumberFormatException e) { return defaultValue; }
     }
 
 }

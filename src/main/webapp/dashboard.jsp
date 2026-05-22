@@ -4,6 +4,7 @@
 <html lang="fr">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
     <title>Dashboard - Gestion PFE</title>
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -42,6 +43,7 @@
             align-items: center;
             justify-content: center;
             font-size: 24px;
+            flex-shrink: 0;
         }
         
         .bg-primary-light { background-color: #e0e7ff; color: #4338ca; }
@@ -51,14 +53,31 @@
         .chart-container {
             background: white;
             border-radius: 12px;
-            padding: 20px;
+            padding: 16px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.04);
             margin-bottom: 24px;
+        }
+
+        @media (min-width: 768px) {
+            .chart-container { padding: 20px; }
         }
 
         .issue-list {
             max-height: 320px;
             overflow-y: auto;
+        }
+
+        @media (max-width: 576px) {
+            .container { padding-left: 12px; padding-right: 12px; }
+            h2 { font-size: 1.3rem; }
+            h3 { font-size: 1.4rem; }
+            .icon-box { width: 40px; height: 40px; font-size: 20px; }
+        }
+
+        @media (max-width: 768px) {
+            .chart-container canvas {
+                max-height: 320px;
+            }
         }
     </style>
 </head>
@@ -66,7 +85,7 @@
 
 <!-- Navbar -->
 <nav class="navbar navbar-expand-lg navbar-dark bg-primary mb-4 shadow-sm">
-    <div class="container-fluid px-4">
+    <div class="container-fluid px-3 px-lg-4">
         <a class="navbar-brand" href="index.jsp">
             <i class="fa-solid fa-graduation-cap me-2"></i>Gestion PFE
         </a>
@@ -94,14 +113,14 @@
 
 <div class="container mb-5">
     
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-bold text-dark"><i class="fa-solid fa-chart-line me-2 text-primary"></i> Dashboard Analytique</h2>
-        <div class="d-flex align-items-center">
-            <form action="dashboard.do" method="get" class="d-flex me-3">
+    <div class="d-flex flex-column flex-md-row justify-content-between align-items-stretch align-items-md-center mb-4 gap-2">
+        <h2 class="fw-bold text-dark mb-0"><i class="fa-solid fa-chart-line me-2 text-primary"></i> Dashboard Analytique</h2>
+        <div class="d-flex flex-column flex-sm-row align-items-stretch align-items-sm-center gap-2">
+            <form action="dashboard.do" method="get" class="d-flex">
                 <input type="text" name="q" class="form-control form-control-sm me-2" placeholder="Chercher un étudiant ou un prof..." value="${searchQuery}" required>
                 <button type="submit" class="btn btn-sm btn-primary"><i class="fa-solid fa-search"></i></button>
             </form>
-            <span class="badge bg-secondary p-2">Année 2025/2026</span>
+            <span class="badge bg-secondary p-2 align-self-start align-self-sm-center">Année 2025/2026</span>
         </div>
     </div>
 
@@ -183,8 +202,8 @@
     <c:if test="${not empty totalEtudiants && totalEtudiants > 0}">
         
         <!-- Key Metrics -->
-        <div class="row g-4 mb-4">
-            <div class="col-md-4">
+        <div class="row g-3 g-md-4 mb-4">
+            <div class="col-12 col-md-4">
                 <div class="card stat-card h-100 p-3">
                     <div class="d-flex align-items-center">
                         <div class="icon-box bg-primary-light me-3">
@@ -198,7 +217,7 @@
                 </div>
             </div>
             
-            <div class="col-md-4">
+            <div class="col-12 col-md-4">
                 <div class="card stat-card h-100 p-3">
                     <div class="d-flex align-items-center">
                         <div class="icon-box bg-success-light me-3">
@@ -212,7 +231,7 @@
                 </div>
             </div>
             
-            <div class="col-md-4">
+            <div class="col-12 col-md-4">
                 <div class="card stat-card h-100 p-3">
                     <div class="d-flex align-items-center">
                         <div class="icon-box bg-warning-light me-3">
@@ -258,26 +277,26 @@
                     </p>
 
                     <div class="row g-3 mb-3">
-                        <div class="col-md-3">
+                        <div class="col-6 col-md-3">
                             <div class="border rounded p-3 h-100">
                                 <div class="text-muted small">Moyenne encadrement</div>
                                 <strong>${verificationReport.encadrementAverageFormatted}</strong>
                                 <div class="small text-muted">Attendu: ${verificationReport.encadrementMinExpected}-${verificationReport.encadrementMaxExpected}</div>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-6 col-md-3">
                             <div class="border rounded p-3 h-100">
                                 <div class="text-muted small">Anomalies critiques</div>
                                 <strong class="text-danger">${verificationReport.criticalCount}</strong>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-6 col-md-3">
                             <div class="border rounded p-3 h-100">
                                 <div class="text-muted small">Alertes</div>
                                 <strong class="text-warning">${verificationReport.warningCount}</strong>
                             </div>
                         </div>
-                        <div class="col-md-3">
+                        <div class="col-6 col-md-3">
                             <div class="border rounded p-3 h-100">
                                 <div class="text-muted small">Planning</div>
                                 <c:choose>
@@ -322,30 +341,30 @@
         </c:if>
 
         <!-- Charts Row 1 -->
-        <div class="row">
+        <div class="row g-3 g-md-4">
             <!-- Bar Chart: Etudiants par Professeur -->
-            <div class="col-lg-8">
+            <div class="col-12 col-lg-8">
                 <div class="chart-container">
-                    <h5 class="mb-4 text-secondary"><i class="fa-solid fa-chart-column me-2"></i> Étudiants encadrés par Professeur</h5>
+                    <h5 class="mb-3 text-secondary"><i class="fa-solid fa-chart-column me-2"></i> Étudiants encadrés par Professeur</h5>
                     <canvas id="profChart" height="100"></canvas>
                 </div>
             </div>
             
             <!-- Pie Chart: Etudiants/Soutenances par Filière -->
-            <div class="col-lg-4">
+            <div class="col-12 col-lg-4">
                 <div class="chart-container">
-                    <h5 class="mb-4 text-secondary"><i class="fa-solid fa-chart-pie me-2"></i> Répartition par Filière</h5>
+                    <h5 class="mb-3 text-secondary"><i class="fa-solid fa-chart-pie me-2"></i> Répartition par Filière</h5>
                     <canvas id="filiereChart" height="200"></canvas>
                 </div>
             </div>
         </div>
         
         <!-- Charts Row 2 -->
-        <div class="row mt-4">
+        <div class="row mt-3">
             <!-- Bar Chart: Participations Jury -->
-            <div class="col-lg-12">
+            <div class="col-12">
                 <div class="chart-container">
-                    <h5 class="mb-4 text-secondary"><i class="fa-solid fa-users me-2"></i> Participations aux Jurys par Professeur</h5>
+                    <h5 class="mb-3 text-secondary"><i class="fa-solid fa-users me-2"></i> Participations aux Jurys par Professeur</h5>
                     <canvas id="juryChart" height="80"></canvas>
                 </div>
             </div>
@@ -390,6 +409,7 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false }
                 },
@@ -430,6 +450,7 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: {
                         position: 'bottom'
@@ -456,6 +477,7 @@
             },
             options: {
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                     legend: { display: false }
                 },

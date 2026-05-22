@@ -46,6 +46,13 @@ public class VerificationServiceImpl implements VerificationService {
 
     @Override
     public VerificationReport verifyGeneratedFiles(List<String> filieresFiltre) {
+        return verifyGeneratedFiles(filieresFiltre, ConstraintSet.defaults());
+    }
+
+    @Override
+    public VerificationReport verifyGeneratedFiles(List<String> filieresFiltre, ConstraintSet constraints) {
+        ConstraintSet c = constraints == null ? ConstraintSet.defaults() : constraints;
+
         VerificationReport report = new VerificationReport();
         List<Affectation> affectations = filterAffectations(affectationDAO.findAllWithDetails(), filieresFiltre);
         List<Soutenance> soutenances = filterSoutenances(soutenanceDAO.findAllWithDetails(), filieresFiltre);
@@ -54,7 +61,7 @@ public class VerificationServiceImpl implements VerificationService {
         report.setPlanningDataAvailable(!soutenances.isEmpty());
 
         verifyAffectations(affectations, report);
-        verifyPlanning(affectations, soutenances, report);
+        verifyPlanning(affectations, soutenances, report, c);
 
         if (report.isPlanningDataAvailable()) {
             report.setNlpSummary(buildLocalSummary(report));
@@ -62,6 +69,8 @@ public class VerificationServiceImpl implements VerificationService {
 
         return report;
     }
+
+    // ─── Filtering ──────────────────────────────────────────────────────────
 
     private List<Affectation> filterAffectations(List<Affectation> source, List<String> filieresFiltre) {
         if (filieresFiltre == null || filieresFiltre.isEmpty()) return source;
@@ -87,6 +96,8 @@ public class VerificationServiceImpl implements VerificationService {
         return result;
     }
 
+    // ─── Affectations ───────────────────────────────────────────────────────
+
     private void verifyAffectations(List<Affectation> affectations, VerificationReport report) {
         if (affectations.isEmpty()) return;
 
@@ -107,18 +118,22 @@ public class VerificationServiceImpl implements VerificationService {
             Professeur encadrant = affectation.getEncadrant();
 
             if (etudiant == null) {
-                report.addIssue("CRITIQUE", "Affectation", "Affectation sans etudiant", "Une ligne d'affectation ne contient aucun etudiant rattache.");
+                report.addIssue("CRITIQUE", "Affectation", "Affectation sans etudiant",
+                        "Une ligne d'affectation ne contient aucun etudiant rattache.");
                 continue;
             }
             if (!affectedStudents.add(etudiant.getIde())) {
-                report.addIssue("CRITIQUE", "Affectation", "Etudiant affecte plusieurs fois", studentName(etudiant) + " apparait dans plusieurs affectations.");
+                report.addIssue("CRITIQUE", "Affectation", "Etudiant affecte plusieurs fois",
+                        studentName(etudiant) + " apparait dans plusieurs affectations.");
             }
             if (encadrant == null) {
-                report.addIssue("CRITIQUE", "Affectation", "Encadrant manquant", studentName(etudiant) + " n'a pas d'encadrant.");
+                report.addIssue("CRITIQUE", "Affectation", "Encadrant manquant",
+                        studentName(etudiant) + " n'a pas d'encadrant.");
                 continue;
             }
             if (encadrant.getIdp() == null) {
-                report.addIssue("CRITIQUE", "Affectation", "Encadrant invalide", studentName(etudiant) + " pointe vers un professeur sans identifiant.");
+                report.addIssue("CRITIQUE", "Affectation", "Encadrant invalide",
+                        studentName(etudiant) + " pointe vers un professeur sans identifiant.");
                 continue;
             }
 
@@ -139,26 +154,27 @@ public class VerificationServiceImpl implements VerificationService {
         for (Map.Entry<Long, Integer> entry : loadByProfessor.entrySet()) {
             int load = entry.getValue();
             if (load < expectedMin || load > expectedMax) {
-                report.addIssue(
-                        "ALERTE",
-                        "Affectation",
-                        "Repartition non equitable",
+                report.addIssue("ALERTE", "Affectation", "Repartition non equitable",
                         namesByProfessor.get(entry.getKey()) + " encadre " + load
                                 + " etudiant(s), alors que la plage attendue est "
                                 + expectedMin + "-" + expectedMax + " (moyenne "
-                                + String.format(java.util.Locale.US, "%.2f", average) + ")."
-                );
+                                + String.format(java.util.Locale.US, "%.2f", average) + ").");
             }
         }
 
         for (Long idp : loadByProfessor.keySet()) {
             if (!professorIds.contains(idp)) {
-                report.addIssue("CRITIQUE", "Affectation", "Professeur introuvable", namesByProfessor.get(idp) + " est utilise dans une affectation mais n'existe plus dans la liste des professeurs.");
+                report.addIssue("CRITIQUE", "Affectation", "Professeur introuvable",
+                        namesByProfessor.get(idp)
+                                + " est utilise dans une affectation mais n'existe plus dans la liste des professeurs.");
             }
         }
     }
 
-    private void verifyPlanning(List<Affectation> affectations, List<Soutenance> soutenances, VerificationReport report) {
+    // ─── Planning ───────────────────────────────────────────────────────────
+
+    private void verifyPlanning(List<Affectation> affectations, List<Soutenance> soutenances,
+                                VerificationReport report, ConstraintSet c) {
         if (soutenances.isEmpty()) return;
 
         Map<Long, Affectation> affectationByStudent = new HashMap<>();
@@ -176,6 +192,7 @@ public class VerificationServiceImpl implements VerificationService {
         Map<String, Set<String>> projectsByRoomSlot = new HashMap<>();
         Map<String, Set<String>> projectsByProfessorSlot = new HashMap<>();
         Map<Long, Map<String, List<DefenseView>>> scheduleByProfessorAndDate = new HashMap<>();
+        Map<Long, Integer> juryParticipations = new HashMap<>();
 
         for (Soutenance soutenance : soutenances) {
             Etudiant etudiant = soutenance.getEtudiant();
@@ -183,24 +200,38 @@ public class VerificationServiceImpl implements VerificationService {
                 scheduledStudentIds.add(etudiant.getIde());
             }
             String projectKey = projectKey(etudiant);
-            DefenseView defense = defensesByProject.computeIfAbsent(projectKey, key -> new DefenseView(projectKey, soutenance));
+            DefenseView defense = defensesByProject.computeIfAbsent(projectKey,
+                    key -> new DefenseView(projectKey, soutenance));
             if (!defense.matches(soutenance)) {
-                report.addIssue("CRITIQUE", "Planning", "Projet planifie sur plusieurs creneaux", "Le projet " + projectKey + " apparait avec des dates, heures ou salles differentes.");
+                report.addIssue("CRITIQUE", "Planning", "Projet planifie sur plusieurs creneaux",
+                        "Le projet " + projectKey + " apparait avec des dates, heures ou salles differentes.");
             }
             defense.addSoutenance(soutenance);
 
-            verifySoutenanceBasics(soutenance, affectationByStudent, report);
+            verifySoutenanceBasics(soutenance, affectationByStudent, report, c);
 
             String dateKey = dateKey(soutenance);
             String hourKey = safe(soutenance.getHeure());
             String roomKey = salleKey(soutenance.getSalle());
             if (!dateKey.isEmpty() && !hourKey.isEmpty() && !roomKey.isEmpty()) {
-                projectsByRoomSlot.computeIfAbsent(dateKey + "|" + hourKey + "|" + roomKey, key -> new TreeSet<>()).add(projectKey);
+                projectsByRoomSlot.computeIfAbsent(dateKey + "|" + hourKey + "|" + roomKey,
+                        key -> new TreeSet<>()).add(projectKey);
+            }
+
+            Jury jury = soutenance.getJury();
+            if (jury != null) {
+                if (jury.getRapporteur1() != null) {
+                    juryParticipations.merge(jury.getRapporteur1().getIdp(), 1, Integer::sum);
+                }
+                if (jury.getRapporteur2() != null) {
+                    juryParticipations.merge(jury.getRapporteur2().getIdp(), 1, Integer::sum);
+                }
             }
 
             for (Professeur professeur : professorsInDefense(soutenance, affectationByStudent)) {
                 String professorSlotKey = dateKey + "|" + hourKey + "|" + professeur.getIdp();
-                projectsByProfessorSlot.computeIfAbsent(professorSlotKey, key -> new TreeSet<>()).add(projectKey);
+                projectsByProfessorSlot.computeIfAbsent(professorSlotKey,
+                        key -> new TreeSet<>()).add(projectKey);
                 scheduleByProfessorAndDate
                         .computeIfAbsent(professeur.getIdp(), key -> new HashMap<>())
                         .computeIfAbsent(dateKey, key -> new ArrayList<>())
@@ -212,28 +243,37 @@ public class VerificationServiceImpl implements VerificationService {
         verifyMissingStudents(expectedStudentNames, scheduledStudentIds, report);
         verifyRoomOverlaps(projectsByRoomSlot, defensesByProject, report);
         verifyProfessorOverlaps(projectsByProfessorSlot, defensesByProject, report);
-        verifyProfessorRest(scheduleByProfessorAndDate, defensesByProject, report);
+        verifyProfessorRest(scheduleByProfessorAndDate, defensesByProject, report, c);
+        verifyJuryLoadGap(juryParticipations, report, c);
     }
 
-    private void verifySoutenanceBasics(Soutenance soutenance, Map<Long, Affectation> affectationByStudent, VerificationReport report) {
+    private void verifySoutenanceBasics(Soutenance soutenance, Map<Long, Affectation> affectationByStudent,
+                                        VerificationReport report, ConstraintSet c) {
         Etudiant etudiant = soutenance.getEtudiant();
         if (etudiant == null) {
-            report.addIssue("CRITIQUE", "Planning", "Soutenance sans etudiant", "Une ligne du planning n'a aucun etudiant rattache.");
+            report.addIssue("CRITIQUE", "Planning", "Soutenance sans etudiant",
+                    "Une ligne du planning n'a aucun etudiant rattache.");
             return;
         }
         if (!affectationByStudent.containsKey(etudiant.getIde())) {
-            report.addIssue("CRITIQUE", "Planning", "Etudiant non affecte planifie", studentName(etudiant) + " est planifie sans affectation correspondante.");
+            report.addIssue("CRITIQUE", "Planning", "Etudiant non affecte planifie",
+                    studentName(etudiant) + " est planifie sans affectation correspondante.");
         }
-        if (soutenance.getDate() == null || soutenance.getHeure() == null || soutenance.getHeure().trim().isEmpty()) {
-            report.addIssue("CRITIQUE", "Planning", "Creneau incomplet", studentName(etudiant) + " n'a pas de date ou d'heure valide.");
+        if (soutenance.getDate() == null || soutenance.getHeure() == null
+                || soutenance.getHeure().trim().isEmpty()) {
+            report.addIssue("CRITIQUE", "Planning", "Creneau incomplet",
+                    studentName(etudiant) + " n'a pas de date ou d'heure valide.");
         }
         if (soutenance.getSalle() == null) {
-            report.addIssue("CRITIQUE", "Planning", "Salle manquante", studentName(etudiant) + " n'a pas de salle assignee.");
+            report.addIssue("CRITIQUE", "Planning", "Salle manquante",
+                    studentName(etudiant) + " n'a pas de salle assignee.");
         }
 
         Jury jury = soutenance.getJury();
-        if (jury == null || jury.getPresident() == null || jury.getRapporteur1() == null || jury.getRapporteur2() == null) {
-            report.addIssue("CRITIQUE", "Planning", "Jury incomplet", studentName(etudiant) + " n'a pas un jury complet (president + 2 rapporteurs).");
+        if (jury == null || jury.getPresident() == null
+                || jury.getRapporteur1() == null || jury.getRapporteur2() == null) {
+            report.addIssue("CRITIQUE", "Planning", "Jury incomplet",
+                    studentName(etudiant) + " n'a pas un jury complet (president + 2 rapporteurs).");
             return;
         }
 
@@ -241,57 +281,78 @@ public class VerificationServiceImpl implements VerificationService {
         uniqueProfessors.add(jury.getPresident().getIdp());
         uniqueProfessors.add(jury.getRapporteur1().getIdp());
         uniqueProfessors.add(jury.getRapporteur2().getIdp());
-        if (uniqueProfessors.size() < 3) {
-            report.addIssue("CRITIQUE", "Planning", "Professeur duplique dans le jury", studentName(etudiant) + " a le meme professeur dans plusieurs roles du jury.");
+        if (uniqueProfessors.size() < c.getMinDistinctJuryMembers()) {
+            report.addIssue("CRITIQUE", "Planning", "Professeur duplique dans le jury",
+                    studentName(etudiant) + " a le meme professeur dans plusieurs roles du jury.");
         }
 
         Affectation affectation = affectationByStudent.get(etudiant.getIde());
         if (affectation != null && affectation.getEncadrant() != null) {
             Long encadrantId = affectation.getEncadrant().getIdp();
-            if (!encadrantId.equals(jury.getPresident().getIdp())) {
-                report.addIssue("ALERTE", "Planning", "President different de l'encadrant", studentName(etudiant) + " a pour encadrant " + professorName(affectation.getEncadrant()) + ", mais le president du jury est " + professorName(jury.getPresident()) + ".");
+            if (c.isEncadrantPresidentRequired() && !encadrantId.equals(jury.getPresident().getIdp())) {
+                String severity = c.isEncadrantPresidentHard() ? "CRITIQUE" : "ALERTE";
+                report.addIssue(severity, "Planning", "President different de l'encadrant",
+                        studentName(etudiant) + " a pour encadrant " + professorName(affectation.getEncadrant())
+                                + ", mais le president du jury est " + professorName(jury.getPresident()) + ".");
             }
-            if (encadrantId.equals(jury.getRapporteur1().getIdp()) || encadrantId.equals(jury.getRapporteur2().getIdp())) {
-                report.addIssue("CRITIQUE", "Planning", "Encadrant aussi rapporteur", studentName(etudiant) + " a son encadrant affecte comme rapporteur.");
+            if (c.isEncadrantRapporteurForbidden()
+                    && (encadrantId.equals(jury.getRapporteur1().getIdp())
+                        || encadrantId.equals(jury.getRapporteur2().getIdp()))) {
+                report.addIssue("CRITIQUE", "Planning", "Encadrant aussi rapporteur",
+                        studentName(etudiant) + " a son encadrant affecte comme rapporteur.");
             }
         }
     }
 
-    private void verifyMissingProjects(Set<String> expectedProjects, Set<String> scheduledProjects, VerificationReport report) {
+    private void verifyMissingProjects(Set<String> expectedProjects, Set<String> scheduledProjects,
+                                       VerificationReport report) {
         for (String expected : expectedProjects) {
             if (!scheduledProjects.contains(expected)) {
-                report.addIssue("ALERTE", "Planning", "Projet affecte non planifie", "Le projet " + expected + " existe dans les affectations mais pas dans le planning.");
+                report.addIssue("ALERTE", "Planning", "Projet affecte non planifie",
+                        "Le projet " + expected + " existe dans les affectations mais pas dans le planning.");
             }
         }
     }
 
-    private void verifyMissingStudents(Map<Long, String> expectedStudentNames, Set<Long> scheduledStudentIds, VerificationReport report) {
+    private void verifyMissingStudents(Map<Long, String> expectedStudentNames, Set<Long> scheduledStudentIds,
+                                       VerificationReport report) {
         for (Map.Entry<Long, String> expected : expectedStudentNames.entrySet()) {
             if (!scheduledStudentIds.contains(expected.getKey())) {
-                report.addIssue("ALERTE", "Planning", "Etudiant affecte non planifie", expected.getValue() + " existe dans les affectations mais pas dans le planning.");
+                report.addIssue("ALERTE", "Planning", "Etudiant affecte non planifie",
+                        expected.getValue() + " existe dans les affectations mais pas dans le planning.");
             }
         }
     }
 
-    private void verifyRoomOverlaps(Map<String, Set<String>> projectsByRoomSlot, Map<String, DefenseView> defensesByProject, VerificationReport report) {
+    private void verifyRoomOverlaps(Map<String, Set<String>> projectsByRoomSlot,
+                                    Map<String, DefenseView> defensesByProject, VerificationReport report) {
         for (Map.Entry<String, Set<String>> entry : projectsByRoomSlot.entrySet()) {
             if (entry.getValue().size() > 1) {
-                report.addIssue("CRITIQUE", "Planning", "Chevauchement de salle", slotLabel(entry.getKey()) + " contient plusieurs projets: " + projectNames(entry.getValue(), defensesByProject) + ".");
+                report.addIssue("CRITIQUE", "Planning", "Chevauchement de salle",
+                        slotLabel(entry.getKey()) + " contient plusieurs projets: "
+                                + projectNames(entry.getValue(), defensesByProject) + ".");
             }
         }
     }
 
-    private void verifyProfessorOverlaps(Map<String, Set<String>> projectsByProfessorSlot, Map<String, DefenseView> defensesByProject, VerificationReport report) {
+    private void verifyProfessorOverlaps(Map<String, Set<String>> projectsByProfessorSlot,
+                                         Map<String, DefenseView> defensesByProject, VerificationReport report) {
         for (Map.Entry<String, Set<String>> entry : projectsByProfessorSlot.entrySet()) {
             if (entry.getValue().size() > 1) {
-                report.addIssue("CRITIQUE", "Planning", "Professeur affecte au meme horaire", slotLabel(entry.getKey()) + " concerne plusieurs projets: " + projectNames(entry.getValue(), defensesByProject) + ".");
+                report.addIssue("CRITIQUE", "Planning", "Professeur affecte au meme horaire",
+                        slotLabel(entry.getKey()) + " concerne plusieurs projets: "
+                                + projectNames(entry.getValue(), defensesByProject) + ".");
             }
         }
     }
 
     private void verifyProfessorRest(Map<Long, Map<String, List<DefenseView>>> scheduleByProfessorAndDate,
-                                     Map<String, DefenseView> defensesByProject,
-                                     VerificationReport report) {
+                                     Map<String, DefenseView> defensesByProject, VerificationReport report,
+                                     ConstraintSet c) {
+        int requiredRestHours = c.getProfRestHours();
+        if (requiredRestHours <= 0) return;
+        String severity = c.isProfRestHard() ? "CRITIQUE" : "ALERTE";
+
         Set<String> reportedPairs = new HashSet<>();
         for (Map.Entry<Long, Map<String, List<DefenseView>>> professorEntry : scheduleByProfessorAndDate.entrySet()) {
             for (Map.Entry<String, List<DefenseView>> dateEntry : professorEntry.getValue().entrySet()) {
@@ -304,13 +365,20 @@ public class VerificationServiceImpl implements VerificationService {
                         int firstSlot = parseHour(first.hour);
                         int secondSlot = parseHour(second.hour);
                         if (firstSlot < 0 || secondSlot < 0) continue;
-                        if (Math.abs(firstSlot - secondSlot) == 1) {
-                            String pairKey = professorEntry.getKey() + "|" + dateEntry.getKey() + "|" + Math.min(firstSlot, secondSlot) + "|" + Math.max(firstSlot, secondSlot);
+                        int gapHours = Math.abs(firstSlot - secondSlot);
+                        if (gapHours > 0 && gapHours <= requiredRestHours) {
+                            String pairKey = professorEntry.getKey() + "|" + dateEntry.getKey()
+                                    + "|" + Math.min(firstSlot, secondSlot)
+                                    + "|" + Math.max(firstSlot, secondSlot);
                             if (reportedPairs.add(pairKey)) {
-                                List<String> conflictingProjects = new ArrayList<>();
-                                conflictingProjects.add(first.projectKey);
-                                conflictingProjects.add(second.projectKey);
-                                report.addIssue("ALERTE", "Planning", "Repos professeur insuffisant", dateEntry.getKey() + " : un professeur a deux soutenances successives sans heure de repos entre " + first.hour + " et " + second.hour + " (" + projectNames(conflictingProjects, defensesByProject) + ").");
+                                List<String> conflicts = new ArrayList<>();
+                                conflicts.add(first.projectKey);
+                                conflicts.add(second.projectKey);
+                                report.addIssue(severity, "Planning", "Repos professeur insuffisant",
+                                        dateEntry.getKey() + " : un professeur enchaine deux soutenances avec un ecart de "
+                                                + gapHours + "h (repos requis: " + requiredRestHours + "h) entre "
+                                                + first.hour + " et " + second.hour + " ("
+                                                + projectNames(conflicts, defensesByProject) + ").");
                             }
                         }
                     }
@@ -319,7 +387,24 @@ public class VerificationServiceImpl implements VerificationService {
         }
     }
 
-    private List<Professeur> professorsInDefense(Soutenance soutenance, Map<Long, Affectation> affectationByStudent) {
+    private void verifyJuryLoadGap(Map<Long, Integer> juryParticipations, VerificationReport report,
+                                   ConstraintSet c) {
+        if (juryParticipations.isEmpty()) return;
+        int min = Integer.MAX_VALUE, max = Integer.MIN_VALUE;
+        for (int v : juryParticipations.values()) { min = Math.min(min, v); max = Math.max(max, v); }
+        int gap = max - min;
+        if (gap > c.getMaxJuryLoadGap()) {
+            String severity = c.isMaxJuryLoadGapHard() ? "CRITIQUE" : "ALERTE";
+            report.addIssue(severity, "Planning", "Charge jury inegale",
+                    "Ecart de participations entre profs: " + gap
+                            + " (max attendu: " + c.getMaxJuryLoadGap() + ").");
+        }
+    }
+
+    // ─── Helpers ─────────────────────────────────────────────────────────────
+
+    private List<Professeur> professorsInDefense(Soutenance soutenance,
+                                                 Map<Long, Affectation> affectationByStudent) {
         Map<Long, Professeur> result = new LinkedHashMap<>();
         if (soutenance.getEtudiant() != null) {
             Affectation affectation = affectationByStudent.get(soutenance.getEtudiant().getIde());
@@ -344,10 +429,12 @@ public class VerificationServiceImpl implements VerificationService {
 
     private String buildLocalSummary(VerificationReport report) {
         if (report.getCriticalCount() > 0) {
-            return "Des anomalies critiques ont ete detectees. Corrigez d'abord les conflits de salles, de professeurs ou les donnees manquantes avant d'utiliser le planning.";
+            return "Des anomalies critiques ont ete detectees. Corrigez d'abord les conflits de salles, "
+                    + "de professeurs ou les donnees manquantes avant d'utiliser le planning.";
         }
         if (report.getWarningCount() > 0) {
-            return "Le planning est exploitable, mais certaines contraintes doivent etre verifiees. Priorite aux ecarts d'equite et aux temps de repos des professeurs.";
+            return "Le planning est exploitable, mais certaines contraintes doivent etre verifiees. "
+                    + "Priorite aux ecarts d'equite et aux temps de repos des professeurs.";
         }
         return "Aucune anomalie bloquante detectee. Les fichiers generes semblent conformes aux contraintes principales.";
     }
@@ -356,16 +443,15 @@ public class VerificationServiceImpl implements VerificationService {
         List<String> names = new ArrayList<>();
         for (String key : projectKeys) {
             DefenseView view = defensesByProject.get(key);
-            names.add(view != null && !view.studentNames.isEmpty() ? String.join(" & ", view.studentNames) : key);
+            names.add(view != null && !view.studentNames.isEmpty()
+                    ? String.join(" & ", view.studentNames) : key);
         }
         return String.join(", ", names);
     }
 
     private String slotLabel(String compositeKey) {
         String[] parts = compositeKey.split("\\|");
-        if (parts.length >= 2) {
-            return parts[0] + " a " + parts[1];
-        }
+        if (parts.length >= 2) return parts[0] + " a " + parts[1];
         return compositeKey;
     }
 
@@ -397,7 +483,11 @@ public class VerificationServiceImpl implements VerificationService {
 
     private int parseHour(String heure) {
         try {
-            return Integer.parseInt(safe(heure).replace("h", "").trim());
+            String h = safe(heure).replace("h", "").trim();
+            if (h.isEmpty()) return -1;
+            if (h.contains(":")) return Integer.parseInt(h.split(":")[0]);
+            if (h.length() > 2) return Integer.parseInt(h.substring(0, h.length() - 2));
+            return Integer.parseInt(h);
         } catch (NumberFormatException e) {
             return -1;
         }

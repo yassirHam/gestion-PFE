@@ -1,0 +1,18 @@
+# =====================================================
+# OPTIONAL legacy NLP configuration
+# =====================================================
+# The recommended way to configure NLP is from the in-app settings page
+# (/settings.do) which stores the values in the database.
+#
+# This file is only read as a fallback when AppSettings has NLP disabled.
+# Copy this file as config.properties only if you really need a static
+# configuration (CI, automated tests, ...).
+#
+# The application works perfectly without this file: the NLP service is
+# fully optional. When no API key is configured the planner uses a built-in
+# heuristic (keyword + language detection) that delivers acceptable results.
+# =====================================================
+
+#nvidia.api.key=YOUR_API_KEY
+#nvidia.base.url=https://integrate.api.nvidia.com/v1
+#nvidia.model=meta/llama-3.3-70b-instruct

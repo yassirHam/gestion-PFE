@@ -168,7 +168,7 @@ public class ExcelImporter {
             e.setNomE(getCellValue(row, 1));
             e.setPrenomE(getCellValue(row, 2));
             e.setEmail(getCellValue(row, 3));
-            e.setBinome_cne(getCellValue(row, 4));
+            e.setBinome_cne(getCellValue(row, 4)); // raw value — resolved below
             e.setFiliere(filiere);
 
             String sujet = getCellValue(row, 5);
@@ -183,7 +183,68 @@ public class ExcelImporter {
 
             list.add(e);
         }
+
+        // Second pass: resolve binome_cne values that look like "NOM PRÉNOM"
+        // (i.e. not a CNE code) by looking up the matching student in the same sheet.
+        // Build a lookup map: normalised "NOM PRÉNOM" -> CNE
+        Map<String, String> nameToCne = new java.util.HashMap<>();
+        for (Etudiant e : list) {
+            if (e.getCne() != null && !e.getCne().isEmpty()
+                    && e.getNomE() != null && e.getPrenomE() != null) {
+                // Index by "NOM PRÉNOM" and "PRÉNOM NOM" (both orders)
+                String key1 = normalizeNameKey(e.getNomE() + " " + e.getPrenomE());
+                String key2 = normalizeNameKey(e.getPrenomE() + " " + e.getNomE());
+                nameToCne.put(key1, e.getCne());
+                nameToCne.put(key2, e.getCne());
+            }
+        }
+        for (Etudiant e : list) {
+            String raw = e.getBinome_cne();
+            if (raw == null || raw.trim().isEmpty()) continue;
+            // If it already looks like a CNE (contains digits and letters, no spaces,
+            // or matches the typical Rxxxxxxx pattern), keep it as-is.
+            if (looksLikeCne(raw)) continue;
+            // Otherwise treat it as a name and resolve to CNE.
+            String resolved = nameToCne.get(normalizeNameKey(raw));
+            if (resolved != null) {
+                e.setBinome_cne(resolved);
+            }
+            // If not found, keep the raw value — the service layer will handle it gracefully.
+        }
+
         return list;
+    }
+
+    /**
+     * Returns true if the value looks like a CNE code rather than a person's name.
+     * A CNE typically has no spaces and contains a mix of letters and digits
+     * (e.g. "R140025687", "G123456", "20190001").
+     */
+    private static boolean looksLikeCne(String value) {
+        if (value == null) return false;
+        String v = value.trim();
+        // Contains a space → almost certainly a name
+        if (v.contains(" ")) return false;
+        // All digits → student ID number
+        if (v.matches("\\d+")) return true;
+        // Starts with a letter followed by digits (common Moroccan CNE pattern)
+        if (v.matches("[A-Za-z]{1,3}\\d+")) return true;
+        // Purely alphabetic with no digits → likely a single-word name, treat as name
+        if (v.matches("[A-Za-zÀ-ÿ]+")) return false;
+        // Mixed alphanumeric without spaces → treat as CNE
+        return v.matches("[A-Za-z0-9]+");
+    }
+
+    /**
+     * Normalise a full name for lookup: uppercase, remove accents, collapse spaces.
+     */
+    private static String normalizeNameKey(String name) {
+        if (name == null) return "";
+        String n = java.text.Normalizer.normalize(name.trim().toUpperCase(Locale.ROOT),
+                java.text.Normalizer.Form.NFD);
+        n = n.replaceAll("\\p{M}", ""); // strip combining diacritics
+        n = n.replaceAll("\\s+", " ").trim();
+        return n;
     }
 
     private static List<Professeur> parseProfesseursSheet(Sheet sheet) {

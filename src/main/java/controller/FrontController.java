@@ -2273,11 +2273,72 @@ public class FrontController extends HttpServlet {
             String[] filieres = {"FILIERE_1", "FILIERE_2"};
             for (String filiere : filieres) {
                 org.apache.poi.ss.usermodel.Sheet sheet = wb.createSheet(filiere);
-                org.apache.poi.ss.usermodel.Row header = sheet.createRow(0);
-                String[] cols = {"CNE", "NOM", "PRÉNOM", "EMAIL", "CNE BINÔME (Optionnel)", "SUJET PFE"};
+
+                // Style helpers
+                org.apache.poi.xssf.usermodel.XSSFCellStyle headerStyle =
+                        (org.apache.poi.xssf.usermodel.XSSFCellStyle) wb.createCellStyle();
+                org.apache.poi.xssf.usermodel.XSSFFont headerFont =
+                        (org.apache.poi.xssf.usermodel.XSSFFont) wb.createFont();
+                headerFont.setBold(true);
+                headerStyle.setFont(headerFont);
+                headerStyle.setFillForegroundColor(
+                        new org.apache.poi.xssf.usermodel.XSSFColor(new byte[]{(byte)47,(byte)84,(byte)150}, null));
+                headerStyle.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
+                org.apache.poi.xssf.usermodel.XSSFFont whiteFont =
+                        (org.apache.poi.xssf.usermodel.XSSFFont) wb.createFont();
+                whiteFont.setBold(true);
+                whiteFont.setColor(new org.apache.poi.xssf.usermodel.XSSFColor(new byte[]{(byte)255,(byte)255,(byte)255}, null));
+                headerStyle.setFont(whiteFont);
+
+                org.apache.poi.xssf.usermodel.XSSFCellStyle noteStyle =
+                        (org.apache.poi.xssf.usermodel.XSSFCellStyle) wb.createCellStyle();
+                noteStyle.setFillForegroundColor(
+                        new org.apache.poi.xssf.usermodel.XSSFColor(new byte[]{(byte)255,(byte)242,(byte)204}, null));
+                noteStyle.setFillPattern(org.apache.poi.ss.usermodel.FillPatternType.SOLID_FOREGROUND);
+                org.apache.poi.xssf.usermodel.XSSFFont noteFont =
+                        (org.apache.poi.xssf.usermodel.XSSFFont) wb.createFont();
+                noteFont.setItalic(true);
+                noteFont.setColor(new org.apache.poi.xssf.usermodel.XSSFColor(new byte[]{(byte)120,(byte)80,(byte)0}, null));
+                noteStyle.setFont(noteFont);
+
+                // Row 0 — instruction note
+                org.apache.poi.ss.usermodel.Row noteRow = sheet.createRow(0);
+                org.apache.poi.ss.usermodel.Cell noteCell = noteRow.createCell(0);
+                noteCell.setCellValue(
+                    "Colonne E : saisissez le CNE du binôme OU son NOM PRÉNOM (ex: BENALI Hamza). " +
+                    "Le système résoudra automatiquement le CNE à l'import.");
+                noteCell.setCellStyle(noteStyle);
+                sheet.addMergedRegion(new org.apache.poi.ss.util.CellRangeAddress(0, 0, 0, 5));
+
+                // Row 1 — column headers
+                org.apache.poi.ss.usermodel.Row header = sheet.createRow(1);
+                String[] cols = {"CNE", "NOM", "PRÉNOM", "EMAIL", "CNE ou NOM PRÉNOM BINÔME (Optionnel)", "SUJET PFE"};
                 for (int i = 0; i < cols.length; i++) {
-                    header.createCell(i).setCellValue(cols[i]);
+                    org.apache.poi.ss.usermodel.Cell cell = header.createCell(i);
+                    cell.setCellValue(cols[i]);
+                    cell.setCellStyle(headerStyle);
                 }
+
+                // Example data rows
+                org.apache.poi.ss.usermodel.Row ex1 = sheet.createRow(2);
+                ex1.createCell(0).setCellValue("R140025687");
+                ex1.createCell(1).setCellValue("BENALI");
+                ex1.createCell(2).setCellValue("Hamza");
+                ex1.createCell(3).setCellValue("h.benali@etu.ma");
+                ex1.createCell(4).setCellValue("EL OUALI Sara");   // name-based example
+                ex1.createCell(5).setCellValue("Application web");
+
+                org.apache.poi.ss.usermodel.Row ex2 = sheet.createRow(3);
+                ex2.createCell(0).setCellValue("R140025688");
+                ex2.createCell(1).setCellValue("EL OUALI");
+                ex2.createCell(2).setCellValue("Sara");
+                ex2.createCell(3).setCellValue("s.elouali@etu.ma");
+                ex2.createCell(4).setCellValue("R140025687");      // CNE-based example
+                ex2.createCell(5).setCellValue("Application web");
+
+                // Auto-size columns
+                for (int i = 0; i < cols.length; i++) sheet.autoSizeColumn(i);
+                sheet.setColumnWidth(4, 10000); // wider for the binôme column
             }
 
             org.apache.poi.ss.usermodel.Sheet profSheet = wb.createSheet("Professeurs");

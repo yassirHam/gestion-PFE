@@ -13,7 +13,7 @@
         <!-- ===== Dialecte Hibernate 6 ===== -->
         <property name="hibernate.dialect">org.hibernate.dialect.MySQLDialect</property>
         <!-- Hibernate met a jour le schema sans supprimer les tables. -->
-        <property name="hibernate.hbm2ddl.auto">update</property>
+        <property name="hibernate.hbm2ddl.auto">create</property>
 
         <!-- ===== Logs SQL (mettre false en prod) ===== -->
         <property name="hibernate.show_sql">true</property>

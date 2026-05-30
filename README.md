@@ -5,7 +5,7 @@ Gestion Des PFE is a Java web application for managing PFE students, professors,
 The application uses JSP/Servlets for the web layer, Hibernate for persistence, MySQL for storage, Apache POI for Excel and DOCX handling, iText for PDF exports, and an optional NVIDIA NIM/OpenAI-compatible NLP service to help classify project subjects by professor specialty.
 
 ## Updates Video link
-https://drive.google.com/file/d/12EkXtTSyvqnNFpCcuRASBgx6dcMHfb23/view?usp=sharing
+https://drive.google.com/file/d/12EkXtTSyvqnNFpCcuRASBgx6dcMHfb23/view?t=67.056
 
 ## Main Features
 
